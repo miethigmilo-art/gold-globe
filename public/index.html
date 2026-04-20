@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌍 Gold Globe AI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <h2>🌍 Gold Globe AI</h2>
+  <p>Lade Weltdaten & KI-Analysen...</p>
+</div>
+
+<!-- Globe -->
+<div id="globe-container">
+  <div id="globe-wrap"></div>
+
+  <!-- Legend -->
+  <div id="legend">
+    <h4>Einfluss auf Gold</h4>
+    <div class="legend-item"><div class="legend-color" style="background:#00aa44"></div> Sehr bullish (+4/+5)</div>
+    <div class="legend-item"><div class="legend-color" style="background:#88cc00"></div> Bullish (+1/+3)</div>
+    <div class="legend-item"><div class="legend-color" style="background:#ffcc00"></div> Neutral (0)</div>
+    <div class="legend-item"><div class="legend-color" style="background:#ff6600"></div> Bearish (-1/-3)</div>
+    <div class="legend-item"><div class="legend-color" style="background:#cc2200"></div> Sehr bearish (-4/-5)</div>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div id="header">
+    <h1>🌍 Gold Globe AI</h1>
+    <div class="subtitle">KI-gestützte Goldmarkt-Analyse • April 2026</div>
+  </div>
+
+  <!-- Gold Price -->
+  <div id="price-panel">
+    <div style="font-size:11px;color:#6080a0;margin-bottom:4px">GOLD (XAU/USD)</div>
+    <div id="price-display">
+      <div id="gold-price-value">Lädt...</div>
+      <div id="gold-price-change"></div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div id="tabs">
+    <div class="tab active" data-tab="events">📍 Events</div>
+    <div class="tab" data-tab="rec">🤖 KI-Analyse</div>
+    <div class="tab" data-tab="signal">⚡ Auto-Signal</div>
+    <div class="tab" data-tab="backtest">📈 Backtest</div>
+  </div>
+
+  <!-- Events Tab -->
+  <div class="tab-content active" id="tab-events">
+    <div id="events-list">
+      <div style="padding:20px;color:#6080a0;font-size:13px">Lade Events...</div>
+    </div>
+  </div>
+
+  <!-- Recommendation Tab -->
+  <div class="tab-content" id="tab-rec">
+    <div id="rec-panel">
+      <button id="rec-btn" onclick="getRecommendation()">
+        🤖 KI-Empfehlung abrufen
+      </button>
+      <div id="rec-output">
+        Klicke den Button um eine KI-Analyse zu Gold zu erhalten.<br><br>
+        Die KI analysiert geopolitische Faktoren, Makroökonomie, Zentralbankpolitik und technische Signale.
+      </div>
+    </div>
+  </div>
+
+  <!-- Signal Tab -->
+  <div class="tab-content" id="tab-signal">
+    <div style="padding:16px">
+      <div style="font-size:11px;color:#6080a0;margin-bottom:12px">KI analysiert Weltlage und sendet automatisch ein Signal an deinen Trading Bot auf Railway.</div>
+
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;color:#6080a0">Strategie:</label>
+        <select id="signal-strategie" style="width:100%;margin-top:4px;background:#0d1b2a;border:1px solid #2a4a6a;color:#e0e6f0;padding:6px 8px;border-radius:6px;font-size:13px">
+          <option value="mittel">Mittel (1.7% Risiko)</option>
+          <option value="aggressiv">Aggressiv (3.7% Risiko)</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button onclick="sendSignal(false)" style="flex:1;padding:11px;background:linear-gradient(135deg,#1a4a2a,#0d2e1a);border:1px solid #2a6a3a;color:#44cc88;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">
+          ⚡ Signal senden
+        </button>
+        <button onclick="sendSignal(true)" style="flex:1;padding:11px;background:linear-gradient(135deg,#1a2a4a,#0d1b2e);border:1px solid #2a4a6a;color:#6090c0;border-radius:8px;cursor:pointer;font-size:13px">
+          🧪 Dry Run
+        </button>
+      </div>
+
+      <div id="signal-output" style="font-size:12px;color:#b0c8e0;min-height:80px"></div>
+
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #1a2a4a">
+        <div style="font-size:11px;color:#6080a0;margin-bottom:8px">⏱️ Auto-Signal (alle X Minuten):</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="auto-interval" type="number" value="60" min="5" style="width:70px;background:#0d1b2a;border:1px solid #2a4a6a;color:#e0e6f0;padding:6px 8px;border-radius:6px;font-size:13px">
+          <span style="font-size:12px;color:#6080a0">Minuten</span>
+          <button id="auto-btn" onclick="toggleAuto()" style="flex:1;padding:7px;background:#0d1b2a;border:1px solid #2a4a6a;color:#6090c0;border-radius:6px;cursor:pointer;font-size:12px">
+            ▶ Starten
+          </button>
+        </div>
+        <div id="auto-status" style="font-size:11px;color:#6080a0;margin-top:6px"></div>
+      </div>
+
+      <div id="signal-log" style="margin-top:14px;font-size:11px;color:#4a6080;max-height:150px;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- Backtest Tab -->
+  <div class="tab-content" id="tab-backtest">
+    <div id="backtest-panel">
+      <button id="backtest-btn" onclick="runBacktest()">
+        📊 Backtest starten (SMA 20/50)
+      </button>
+      <div id="backtest-stats"></div>
+      <div id="backtest-chart-container">
+        <canvas id="backtest-chart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Country Popup -->
+<div id="popup">
+  <div id="popup-header">
+    <div id="popup-title">Land</div>
+    <button id="popup-close" onclick="closePopup()">✕</button>
+  </div>
+  <div id="popup-body">
+    <div class="popup-loading">Analysiere mit KI...</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
