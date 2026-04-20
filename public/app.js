@@ -364,6 +364,100 @@ async function runBacktest() {
   }
 }
 
+// ── Trading Dashboard ────────────────────────────────────────────────────────
+const TRADING_BOT_URL = 'https://trading-bot-production-86d8.up.railway.app';
+
+async function loadTrading() {
+  const el = document.getElementById('trading-accounts');
+  el.innerHTML = '<div style="color:#6080a0;font-size:12px;padding:10px 0">Lädt...</div>';
+  try {
+    const r = await fetch(`${TRADING_BOT_URL}/api/performance`);
+    const d = await r.json();
+
+    const konten = [
+      { key: 'mittel',    label: 'Mittel',     farbe: '#60a5fa', risiko: '1.7%' },
+      { key: 'aggressiv', label: 'Aggressiv',  farbe: '#fb923c', risiko: '3.7%' },
+      { key: 'goldglobe', label: '🤖 GoldGlobe', farbe: '#44cc88', risiko: '1.7% + KI' }
+    ];
+
+    el.innerHTML = konten.map(k => {
+      const s = d[k.key];
+      if (!s) return '';
+      const equity = parseFloat(s.aktuellesEquity || 0);
+      const pnl    = parseFloat(s.gesamtPnL || 0);
+      const dd     = parseFloat(s.drawdown || 0);
+      return `
+        <div style="background:rgba(15,25,45,0.8);border:1px solid ${k.farbe}33;border-radius:8px;padding:12px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:13px;font-weight:600;color:${k.farbe}">${k.label}</div>
+            <div style="font-size:10px;color:#6080a0">Risiko: ${k.risiko}</div>
+          </div>
+          <div style="font-size:22px;font-weight:bold;color:${equity >= 1000 ? '#44cc88' : '#ff6666'};margin-bottom:8px">${equity.toFixed(2)} €</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+            <div style="background:rgba(0,0,0,0.2);border-radius:4px;padding:6px">
+              <div style="font-size:9px;color:#6080a0">Trades</div>
+              <div style="font-size:13px;font-weight:600">${s.trades}</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.2);border-radius:4px;padding:6px">
+              <div style="font-size:9px;color:#6080a0">Win-Rate</div>
+              <div style="font-size:13px;font-weight:600">${s.winRate}%</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.2);border-radius:4px;padding:6px">
+              <div style="font-size:9px;color:#6080a0">Drawdown</div>
+              <div style="font-size:13px;font-weight:600;color:${dd > 15 ? '#ff6666' : '#ffcc44'}">${dd.toFixed(1)}%</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.2);border-radius:4px;padding:6px;grid-column:1/-1">
+              <div style="font-size:9px;color:#6080a0">Gesamt PnL</div>
+              <div style="font-size:13px;font-weight:600;color:${pnl >= 0 ? '#44cc88' : '#ff6666'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} €</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (err) {
+    el.innerHTML = `<div style="color:#ff6666;font-size:12px">Fehler: ${err.message}</div>`;
+  }
+}
+
+async function triggerAdjust() {
+  const btn = document.getElementById('adjust-btn');
+  const out = document.getElementById('adjust-output');
+  btn.disabled = true;
+  btn.textContent = '⏳ KI analysiert...';
+  out.textContent = '';
+  try {
+    const r = await fetch(`${TRADING_BOT_URL}/api/auto-adjust`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategie: 'goldglobe' })
+    });
+    const d = await r.json();
+    const res = d.ergebnisse?.goldglobe;
+    if (res?.status === 'adjusted') {
+      out.innerHTML = `✅ Angepasst: SL → ${res.newSL} | TP → ${res.newTP}<br>Sentiment: ${res.view?.sentiment} (${res.view?.confidence}% Konfidenz)`;
+    } else if (res?.status === 'no_position') {
+      out.textContent = '⏭️ Keine offene Position gerade';
+    } else if (res?.status === 'low_confidence') {
+      out.textContent = `⏭️ Konfidenz zu niedrig (${res.confidence}%)`;
+    } else if (res?.status === 'no_change') {
+      out.textContent = '⏭️ KI sagt: alles behalten';
+    } else {
+      out.textContent = JSON.stringify(res);
+    }
+  } catch (err) {
+    out.textContent = 'Fehler: ' + err.message;
+  }
+  btn.disabled = false;
+  btn.textContent = '🤖 KI SL/TP jetzt anpassen (GoldGlobe)';
+}
+
+// Auto-refresh Trading Tab alle 30s wenn aktiv
+setInterval(() => {
+  if (document.getElementById('tab-trading').classList.contains('active')) {
+    loadTrading();
+  }
+}, 30000);
+
 // ── Auto-Signal ──────────────────────────────────────────────────────────────
 let autoTimer = null;
 
@@ -452,6 +546,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'trading') loadTrading();
   });
 });
 

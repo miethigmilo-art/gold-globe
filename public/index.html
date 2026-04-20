@@ -49,8 +49,9 @@
   <!-- Tabs -->
   <div id="tabs">
     <div class="tab active" data-tab="events">📍 Events</div>
-    <div class="tab" data-tab="rec">🤖 KI-Analyse</div>
-    <div class="tab" data-tab="signal">⚡ Auto-Signal</div>
+    <div class="tab" data-tab="rec">🤖 KI</div>
+    <div class="tab" data-tab="trading">📊 Trading</div>
+    <div class="tab" data-tab="signal">⚡ Signal</div>
     <div class="tab" data-tab="backtest">📈 Backtest</div>
   </div>
 
@@ -70,6 +71,23 @@
       <div id="rec-output">
         Klicke den Button um eine KI-Analyse zu Gold zu erhalten.<br><br>
         Die KI analysiert geopolitische Faktoren, Makroökonomie, Zentralbankpolitik und technische Signale.
+      </div>
+    </div>
+  </div>
+
+  <!-- Trading Tab -->
+  <div class="tab-content" id="tab-trading">
+    <div style="padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:11px;color:#6080a0">Live Trading Stats</div>
+        <button onclick="loadTrading()" style="background:none;border:1px solid #1a3a5a;color:#6090c0;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">↻ Refresh</button>
+      </div>
+      <div id="trading-accounts"></div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #1a2a4a">
+        <button onclick="triggerAdjust()" id="adjust-btn" style="width:100%;padding:10px;background:linear-gradient(135deg,#1a3a4a,#0d2030);border:1px solid #2a6a8a;color:#44aacc;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">
+          🤖 KI SL/TP jetzt anpassen (GoldGlobe)
+        </button>
+        <div id="adjust-output" style="font-size:11px;color:#6080a0;margin-top:8px"></div>
       </div>
     </div>
   </div>
