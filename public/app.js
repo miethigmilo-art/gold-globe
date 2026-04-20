@@ -365,13 +365,11 @@ async function runBacktest() {
 }
 
 // ── Trading Dashboard ────────────────────────────────────────────────────────
-const TRADING_BOT_URL = 'https://trading-bot-production-86d8.up.railway.app';
-
 async function loadTrading() {
   const el = document.getElementById('trading-accounts');
   el.innerHTML = '<div style="color:#6080a0;font-size:12px;padding:10px 0">Lädt...</div>';
   try {
-    const r = await fetch(`${TRADING_BOT_URL}/api/performance`);
+    const r = await fetch('/api/trading-performance');
     const d = await r.json();
 
     const konten = [
@@ -426,7 +424,7 @@ async function triggerAdjust() {
   btn.textContent = '⏳ KI analysiert...';
   out.textContent = '';
   try {
-    const r = await fetch(`${TRADING_BOT_URL}/api/auto-adjust`, {
+    const r = await fetch('/api/trading-adjust', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ strategie: 'goldglobe' })
@@ -451,7 +449,6 @@ async function triggerAdjust() {
   btn.textContent = '🤖 KI SL/TP jetzt anpassen (GoldGlobe)';
 }
 
-// Auto-refresh Trading Tab alle 30s wenn aktiv
 setInterval(() => {
   if (document.getElementById('tab-trading').classList.contains('active')) {
     loadTrading();

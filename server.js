@@ -471,6 +471,26 @@ tp_adjustment_pct: % Änderung vom aktuellen TP (positiv = weiter bei Long)` }]
   }
 });
 
+// ── Trading Bot Proxy ────────────────────────────────────────────────────────
+app.get('/api/trading-performance', async (req, res) => {
+  try {
+    const r = await axios.get(`${TRADING_BOT_URL}/api/performance`, { timeout: 15000 });
+    res.json(r.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/trading-adjust', async (req, res) => {
+  try {
+    const r = await axios.post(`${TRADING_BOT_URL}/api/auto-adjust`,
+      req.body, { timeout: 60000 });
+    res.json(r.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GeoJSON proxy (cached)
 let geoJsonCache = null;
 app.get('/api/geojson', async (req, res) => {
