@@ -106,6 +106,7 @@ body {
 /* Tab content */
 .tab-content { display: none; flex: 1; overflow-y: auto; }
 .tab-content.active { display: flex; flex-direction: column; }
+#tab-dashboard { padding: 0; overflow: hidden; }
 
 /* Scrollbar */
 .tab-content::-webkit-scrollbar { width: 4px; }
