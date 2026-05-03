@@ -507,4 +507,95 @@ app.get('/api/geojson', async (req, res) => {
   }
 });
 
+// ── Server-seitige Automatik ──────────────────────────
+let autoInterval  = null;
+let autoConfig    = { strategie: 'goldglobe', intervalMins: 60 };
+let letzteSignale = [];
+
+async function runAutoSignal() {
+  console.log(`🤖 Auto-Signal läuft [${autoConfig.strategie}]...`);
+  try {
+    let currentPrice = 3200;
+    try {
+      const gp = await axios.get(
+        'https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=5d',
+        { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 }
+      );
+      const closes = gp.data.chart.result[0].indicators.quote[0].close.filter(Boolean);
+      currentPrice = closes[closes.length - 1];
+    } catch(e) { console.log('Preis-Fallback genutzt:', e.message); }
+
+    const msg = await client.messages.create({
+      model: 'claude-opus-4-6',
+      max_tokens: 512,
+      thinking: { type: 'adaptive' },
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content:
+        `Aktueller Goldpreis: $${currentPrice.toFixed(2)}\n\n` +
+        `Analysiere den Goldmarkt JETZT und generiere ein präzises Trading-Signal.\n\n` +
+        `Strategie-Parameter:\n- Win-Rate: 56%, Profit Factor: 1.7, Max Drawdown: 32%\n- Nur traden wenn Konfidenz > 65%\n\n` +
+        `Gib NUR dieses JSON zurück:\n` +
+        `{"signal":"BUY","confidence":75,"sl":${(currentPrice*0.985).toFixed(2)},"tp":${(currentPrice*1.025).toFixed(2)},"reason":"kurze Begründung","skip":false}\n\n` +
+        `Wenn kein klares Signal: {"skip":true,"reason":"Kein klares Signal"}`
+      }]
+    });
+
+    const text   = msg.content.find(b => b.type === 'text')?.text || '{}';
+    const match  = text.match(/\{[\s\S]*\}/);
+    const signal = JSON.parse(match[0]);
+
+    const logEntry = {
+      ts:          new Date().toISOString(),
+      strategie:   autoConfig.strategie,
+      signal:      signal.skip ? 'SKIP' : signal.signal,
+      confidence:  signal.confidence || null,
+      reason:      signal.reason,
+      botResponse: null
+    };
+
+    if (!signal.skip) {
+      try {
+        const r = await axios.post(
+          `${TRADING_BOT_URL}/webhook/${autoConfig.strategie}`,
+          { side: signal.signal, sl: parseFloat(signal.sl), tp: parseFloat(signal.tp) },
+          { timeout: 10000 }
+        );
+        logEntry.botResponse = r.data;
+        console.log(`✅ Auto-Signal gesendet: ${signal.signal} | Konfidenz: ${signal.confidence}%`);
+      } catch(e) {
+        logEntry.botResponse = { error: e.message };
+        console.error('❌ Bot-Webhook Fehler:', e.message);
+      }
+    } else {
+      console.log(`⏭ Übersprungen: ${signal.reason}`);
+    }
+
+    letzteSignale.unshift(logEntry);
+    if (letzteSignale.length > 50) letzteSignale.pop();
+
+  } catch(e) {
+    console.error('❌ Auto-Signal Fehler:', e.message);
+  }
+}
+
+app.post('/api/auto/start', (req, res) => {
+  const { strategie = 'goldglobe', intervalMins = 60 } = req.body;
+  if (autoInterval) clearInterval(autoInterval);
+  autoConfig = { strategie, intervalMins };
+  runAutoSignal();
+  autoInterval = setInterval(runAutoSignal, intervalMins * 60 * 1000);
+  console.log(`▶ Automatik gestartet: alle ${intervalMins} Min [${strategie}]`);
+  res.json({ ok: true, strategie, intervalMins });
+});
+
+app.post('/api/auto/stop', (req, res) => {
+  if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
+  console.log('⏹ Automatik gestoppt');
+  res.json({ ok: true });
+});
+
+app.get('/api/auto/status', (req, res) => {
+  res.json({ aktiv: !!autoInterval, ...autoConfig, letzteSignale });
+});
+
 app.listen(PORT, () => console.log(`🌍 Gold Globe läuft auf http://localhost:${PORT}`));
