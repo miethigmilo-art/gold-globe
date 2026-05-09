@@ -68,43 +68,13 @@
   <!-- Tabs -->
   <div id="tabs">
     <div class="tab active" data-tab="events">Events</div>
-    <div class="tab" data-tab="rec">KI</div>
-    <div class="tab" data-tab="trading">Trading</div>
     <div class="tab" data-tab="dashboard">Bot</div>
-    <div class="tab" data-tab="signal">Signal</div>
-    <div class="tab" data-tab="backtest">Backtest</div>
   </div>
 
   <!-- Events Tab -->
   <div class="tab-content active" id="tab-events">
     <div id="events-list">
       <div class="loading-msg">Lade Events...</div>
-    </div>
-  </div>
-
-  <!-- KI Tab -->
-  <div class="tab-content" id="tab-rec">
-    <div id="rec-panel">
-      <button id="rec-btn" onclick="getRecommendation()">KI-Empfehlung abrufen</button>
-      <div id="rec-output">
-        Die KI analysiert geopolitische Faktoren, Makroökonomie, Zentralbankpolitik und technische Signale für Gold.
-      </div>
-    </div>
-  </div>
-
-  <!-- Trading Tab -->
-  <div class="tab-content" id="tab-trading">
-    <div class="tab-inner">
-      <div class="section-header">
-        <span class="section-title">Live Trading Stats</span>
-        <button class="icon-btn" onclick="loadTrading()">↻</button>
-      </div>
-      <div id="trading-accounts"></div>
-      <div class="divider"></div>
-      <button onclick="triggerAdjust()" id="adjust-btn" class="action-btn">
-        KI — SL/TP jetzt anpassen (GoldGlobe)
-      </button>
-      <div id="adjust-output" class="output-note"></div>
     </div>
   </div>
 
@@ -115,54 +85,6 @@
       style="width:100%;height:100%;border:none;background:#060810"
       title="Trading Bot Dashboard">
     </iframe>
-  </div>
-
-  <!-- Signal Tab -->
-  <div class="tab-content" id="tab-signal">
-    <div class="tab-inner">
-      <div class="field-group">
-        <label class="field-label">Strategie</label>
-        <select id="signal-strategie" class="field-select">
-          <option value="goldglobe" selected>GoldGlobe (1.0% Risiko)</option>
-          <option value="mittel">Mittel (1.5% Risiko)</option>
-          <option value="aggressiv">Aggressiv (2.0% Risiko)</option>
-          <option value="konservativ">Konservativ (1.0% Risiko)</option>
-          <option value="optimiert">Optimiert (1.0% Risiko)</option>
-          <option value="adaptive">Adaptive (1.0% Risiko)</option>
-        </select>
-      </div>
-
-      <div class="btn-row">
-        <button onclick="sendSignal(false)" class="action-btn accent">Signal senden</button>
-        <button onclick="sendSignal(true)" class="action-btn">Dry Run</button>
-      </div>
-
-      <div id="signal-output" class="output-box"></div>
-
-      <div class="divider"></div>
-
-      <div class="field-group">
-        <label class="field-label">Auto-Signal Intervall (Minuten)</label>
-        <div class="inline-row">
-          <input id="auto-interval" type="number" value="60" min="5" class="field-input sm">
-          <button id="auto-btn" onclick="toggleAuto()" class="action-btn">Starten</button>
-        </div>
-        <div id="auto-status" class="output-note"></div>
-      </div>
-
-      <div id="signal-log" class="log-box"></div>
-    </div>
-  </div>
-
-  <!-- Backtest Tab -->
-  <div class="tab-content" id="tab-backtest">
-    <div id="backtest-panel">
-      <button id="backtest-btn" onclick="runBacktest()" class="action-btn full">Backtest starten (SMA 20/50)</button>
-      <div id="backtest-stats"></div>
-      <div id="backtest-chart-container">
-        <canvas id="backtest-chart"></canvas>
-      </div>
-    </div>
   </div>
 
 </div>
@@ -178,7 +100,6 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
 <script src="app.js"></script>
 </body>
