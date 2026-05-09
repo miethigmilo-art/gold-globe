@@ -42,6 +42,26 @@ body {
   inset: 0;
 }
 
+/* ── Resize Handle ── */
+#resize-handle {
+  width: 4px;
+  flex-shrink: 0;
+  cursor: ew-resize;
+  background: var(--border);
+  position: relative;
+  z-index: 20;
+  transition: background .15s;
+}
+#resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+}
+#resize-handle:hover,
+#resize-handle.dragging {
+  background: var(--gold);
+}
+
 /* ── Sidebar ─────────────────────────────────────────*/
 #sidebar {
   width: var(--sidebar-w);

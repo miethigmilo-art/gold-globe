@@ -576,3 +576,40 @@ async function init() {
 }
 
 init();
+
+// ── Sidebar Resize ────────────────────────────────────────────────────────────
+(function initResize() {
+  const handle  = document.getElementById('resize-handle');
+  const sidebar = document.getElementById('sidebar');
+  const wrap    = document.getElementById('globe-wrap');
+  if (!handle || !sidebar) return;
+
+  let dragging = false;
+
+  handle.addEventListener('mousedown', e => {
+    dragging = true;
+    handle.classList.add('dragging');
+    document.body.style.cursor    = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const newW = Math.max(280, Math.min(700, window.innerWidth - e.clientX));
+    sidebar.style.width = newW + 'px';
+    const globeW = window.innerWidth - newW - 4;
+    if (wrap) {
+      wrap.style.width = globeW + 'px';
+      if (globe) globe.width(globeW);
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor    = '';
+    document.body.style.userSelect = '';
+  });
+})();
