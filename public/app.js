@@ -34,7 +34,7 @@ function eventIcon(type) {
 function initGlobe(countries) {
   countryData = countries;
 
-  const w = window.innerWidth - 340;
+  const w = window.innerWidth - 370;
   const h = window.innerHeight;
   const wrap = document.getElementById('globe-wrap');
   wrap.style.width = w + 'px';
@@ -63,7 +63,7 @@ function initGlobe(countries) {
   globe.controls().autoRotateSpeed = 0.3;
 
   window.addEventListener('resize', () => {
-    const nw = window.innerWidth - 340;
+    const nw = window.innerWidth - 370;
     const nh = window.innerHeight;
     wrap.style.width = nw + 'px';
     wrap.style.height = nh + 'px';

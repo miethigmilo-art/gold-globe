@@ -1,0 +1,7 @@
+{
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://web-production-d4ce4.up.railway.app/api/:path*" },
+    { "source": "/img/:path*", "destination": "https://web-production-d4ce4.up.railway.app/img/:path*" }
+  ]
+}
