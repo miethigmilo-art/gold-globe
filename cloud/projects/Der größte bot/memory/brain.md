@@ -12,6 +12,13 @@ falls sie sich extern geändert hat. Konflikt-Resolution: User-Edit gewinnt.
 
 ## Active Pauses
 
+## News Feeds
+
+- https://www.investing.com/rss/news_25.rss
+- https://www.fxstreet.com/rss/news
+- https://feeds.reuters.com/reuters/businessNews
+- https://www.cnbc.com/id/10000664/device/rss/rss.html
+
 ## Strategy Stats
 
 ```yaml
@@ -39,6 +46,8 @@ breakout:
 
 - (Bot trägt hier nach Trades automatisch Beobachtungen ein. Du kannst frei
   editieren — der Bot überschreibt diese Sektion nur additiv, nie destruktiv.)
+
+## AI Audit Log
 
 ## Open Questions
 

@@ -20,18 +20,29 @@ Gedächtnis in einer Obsidian-Markdown-Datei.
 
 ```
 src/
-├── index.js          orchestrator + main loop          ✓ skeleton
-├── capital.js        Capital.com REST-Client           ✓ login/order/positions funktionieren
-├── data.js           candles + market info             ✓ funktioniert
-├── memory.js         Obsidian markdown read/write      ✓ funktioniert
-├── learner.js        Kelly-Gewichtung, Stats           ✓ funktioniert
-├── risk.js           Sizing, Drawdown, Tages-Stop      ✓ funktioniert
+├── index.js          orchestrator + tick + news-tick   ✓ skeleton
+├── capital.js        Capital.com REST-Client           ✓ login/order/positions
+├── data.js           Indikatoren                       ✓
+├── memory.js         Obsidian markdown read/write      ✓
+├── learner.js        Kelly-Gewichtung                  ✓
+├── risk.js           Sizing/Drawdown/Tages-Stop        ✓
+├── news.js           RSS-Polling + Dedupe              ✓
+├── ai.js             Claude-API News-Scoring           ✓ (output_config.format JSON-Schema)
 └── strategies/
-    └── index.js      Strategie-Registry + 3 Beispiele  ✓ Logik vorhanden, nicht backtested
+    └── index.js      trendFollow / meanRev / breakout  ✓ Logik, nicht backtested
 
 memory/
-└── brain.md          Persistenter Bot-Speicher         ✓ Initial-Sektionen
+└── brain.md          Persistenter Bot-Speicher         ✓
 ```
+
+**AI-Reaktionen auf News:**
+
+- Claude-Modell bewertet jedes News-Item gegen die Watchlist
+- Verdict-Schema: `action ∈ {NONE, OPEN_TRADE, FILTER_STRENGTHEN, FILTER_BLOCK, EMERGENCY_CLOSE}` + `confidence` 0-1
+- `OPEN_TRADE` nur bei `confidence > 0.8` UND `AI_MIN_CONFIDENCE` Threshold
+- AI-Trades nutzen `AI_TRADE_SIZE_FACTOR` (default 0.5) auf den Risk-Multiplikator → kleinere Positionen als Strategie-Trades
+- Risk-Gate (Drawdown, Tages-Stop) gilt auch für AI-Trades
+- Jeder AI-Trade wird in `memory/brain.md` → `## AI Audit Log` festgehalten
 
 **Was fehlt für Produktiv-Einsatz:**
 

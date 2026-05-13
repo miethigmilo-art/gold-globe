@@ -9,7 +9,9 @@
     "live":  "node src/index.js --live"
   },
   "dependencies": {
-    "axios":  "^1.7.0",
-    "dotenv": "^16.4.0"
+    "@anthropic-ai/sdk": "^0.40.0",
+    "axios":             "^1.7.0",
+    "dotenv":            "^16.4.0",
+    "rss-parser":        "^3.13.0"
   }
 }
