@@ -119,6 +119,44 @@ Beim nächsten Auto-Push landet es in der Cloud.
 
 ---
 
+### 7) Claude Auto-Push einrichten (optional aber empfohlen)
+
+Damit **Claude Code** auf deinem PC nach jeder Code-Änderung automatisch
+committet und pusht – ohne dass du es ihm sagen musst.
+
+**Option A: Via `CLAUDE.md` (geht ohne weiteres Setup)**
+
+Die Datei `CLAUDE.md` im Repo-Root weist jede Claude-Session an, nach
+Änderungen automatisch zu pushen. Funktioniert in jeder Claude-Session
+(PC, Web, iPad).
+
+**Option B: Via Hook (Hard-Enforcement)**
+
+Falls Claude trotzdem mal vergisst – hinzufügen in `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && git add -A && git diff --cached --quiet || (git commit -m \"claude: auto-sync $(date +%H:%M)\" && git push origin HEAD)"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Das pusht **nach jedem Tool-Use** von Edit/Write automatisch. Vorsicht:
+Auch unfertige Änderungen landen sofort in der Cloud.
+
+---
+
 ## Troubleshooting
 
 | Problem | Lösung |
