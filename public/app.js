@@ -556,6 +556,116 @@ async function submitTrade() {
 }
 
 // ── Fleet (Externe Bots) ──────────────────────────────────────────────────────
+// ── Bot-Status Tab ────────────────────────────────────────────────────────────
+async function loadBotStatus() {
+  const el = document.getElementById('bot-status-content');
+  if (!el) return;
+  el.innerHTML = '<div class="loading-msg">Lade...</div>';
+  try {
+    const [snapR, portR, logR] = await Promise.all([
+      fetch(`/api/snapshot?ticker=${encodeURIComponent(currentTicker)}`),
+      fetch('/api/portfolio'),
+      fetch('/api/winrate')
+    ]);
+    const snap = await snapR.json();
+    const port = await portR.json();
+    const log  = await logR.json();
+
+    const conf = snap.confluence || {};
+    const dirColor = conf.direction === 'BUY' ? '#44cc88' : conf.direction === 'SELL' ? '#ff4444' : '#ffcc00';
+
+    el.innerHTML = `
+      <div class="analytics-section">
+        <div class="analytics-title">Aktueller Zustand — ${snap.meta?.name || currentTicker}</div>
+        <div class="ind-grid">
+          <div class="ind-cell">
+            <div class="ind-label">Preis</div>
+            <div class="ind-val">$${snap.price?.current?.toFixed(2) || '—'}</div>
+          </div>
+          <div class="ind-cell">
+            <div class="ind-label">Regime</div>
+            <div class="ind-val" style="color:${regimeColor(snap.regime||'neutral')}">${(snap.regime||'—').toUpperCase()}</div>
+          </div>
+          <div class="ind-cell">
+            <div class="ind-label">Confluence</div>
+            <div class="ind-val" style="color:${dirColor}">${conf.score||0}/${conf.maxScore||13}</div>
+          </div>
+          <div class="ind-cell">
+            <div class="ind-label">Signal</div>
+            <div class="ind-val" style="color:${dirColor}">${conf.direction||'—'}</div>
+          </div>
+          <div class="ind-cell">
+            <div class="ind-label">Session</div>
+            <div class="ind-val" style="color:${snap.session?.tradeable?'#44cc88':'#ff8844'}">${snap.session?.tradeable?'OK':'Geblockt'}</div>
+          </div>
+          <div class="ind-cell">
+            <div class="ind-label">Tradeable</div>
+            <div class="ind-val" style="color:${conf.tradeable&&snap.session?.tradeable?'#44cc88':'#ff4444'}">${conf.tradeable&&snap.session?.tradeable?'JA':'NEIN'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="analytics-title">Portfolio</div>
+        <div class="ind-grid">
+          <div class="ind-cell">
+            <div class="ind-label">Equity</div>
+            <div class="ind-val" style="color:#f0c040">$${port.equity?.toFixed(2)||'—'}</div>
+          </div>
+          <div class="ind-cell">
+            <div class="ind-label">Offene Pos</div>
+            <div class="ind-val">${port.openCount||0} / ${port.settings?.maxOpenTrades||5}</div>
+          </div>
+          <div class="ind-cell">
+            <div class="ind-label">Win-Rate</div>
+            <div class="ind-val" style="color:#44cc88">${port.winRate||'—'}</div>
+          </div>
+          <div class="ind-cell">
+            <div class="ind-label">Gesamt PnL</div>
+            <div class="ind-val" style="color:${parseFloat(port.totalPnL||0)>=0?'#44cc88':'#ff4444'}">${parseFloat(port.totalPnL||0)>=0?'+':''}$${parseFloat(port.totalPnL||0).toFixed(2)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="analytics-title">Signal-Log (letzte 10)</div>
+        <div style="font-size:10px">
+          ${(log.recentSignals||[]).slice(0,10).map(s => {
+            const c = s.signal==='BUY'?'#44cc88':s.signal==='SELL'?'#ff4444':s.signal==='SKIP'?'#ffcc00':'#6090b0';
+            return `<div class="history-row">
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:#c0d0e8">${s.ticker||'—'}</span>
+                <span style="color:${c};font-weight:700">${s.signal||'—'}</span>
+                <span style="color:#4a6080">${s.ts?.split('T')[0]} ${s.ts?.split('T')[1]?.slice(0,5)}</span>
+              </div>
+              <div style="color:#4a6080;margin-top:2px">${s.reason||''} ${s.confluenceScore!==undefined?'· Conf:'+s.confluenceScore:''}</div>
+            </div>`;
+          }).join('')}
+          ${!log.recentSignals?.length ? '<div style="color:#4a6080;padding:6px 0">Keine Signale</div>' : ''}
+        </div>
+      </div>
+
+      <div class="analytics-section" style="border-bottom:none">
+        <div class="analytics-title">Obsidian Sync</div>
+        <div style="font-size:10px;color:#6090b0;line-height:1.7">
+          Auto-Sync alle 15 Min → <code style="color:#a78bfa">cloud/obsidian/trading/DATUM.md</code><br>
+          Enthält: Indikatoren, Confluence, Positionen, Trades, Signal-Log, Fleet
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    el.innerHTML = `<div style="color:#ff6666;padding:12px;font-size:12px">Fehler: ${e.message}</div>`;
+  }
+}
+
+async function syncBotStatus() {
+  try {
+    const r = await fetch('/api/trades/sync-obsidian', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ ticker: currentTicker }) });
+    const d = await r.json();
+    alert(d.ok ? `📁 Gespeichert: ${d.file?.split('/').slice(-2).join('/')}` : 'Fehler: ' + d.error);
+  } catch (e) { alert('Fehler: ' + e.message); }
+}
+
 async function loadFleet() {
   try {
     const r = await fetch('/api/fleet');
@@ -600,7 +710,7 @@ document.querySelectorAll('.tab').forEach(tab => {
 
     if (tab.dataset.tab === 'positions') loadPositions();
     if (tab.dataset.tab === 'signal')    loadFleet();
-    if (tab.dataset.tab === 'neural')    { if (window.initNeuralViz) window.initNeuralViz(); }
+    if (tab.dataset.tab === 'neural')    loadBotStatus();
   });
 });
 

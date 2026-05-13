@@ -1240,51 +1240,131 @@ function calcUnrealizedPnL(pos, currentPrice) {
   return parseFloat((diff * pos.units).toFixed(2));
 }
 
-// ── Obsidian-Sync ─────────────────────────────────────────────────────────────
-function syncToObsidian(p) {
+// ── Obsidian-Sync (vollständiger Bot-Zustand als Datei) ───────────────────────
+async function syncToObsidian(p, tickerOverride) {
   try {
     fs.mkdirSync(OBSIDIAN_TRADES, { recursive: true });
-    const today  = new Date().toISOString().split('T')[0];
-    const closed = p.closedTrades.slice(0, 50);
 
+    const now    = new Date();
+    const today  = now.toISOString().split('T')[0];
+    const time   = now.toISOString().replace('T', ' ').slice(0, 19);
+    const closed = p.closedTrades.slice(0, 200);
     const wins   = closed.filter(t => t.realizedPnL > 0).length;
-    const losses = closed.filter(t => t.realizedPnL <= 0).length;
     const totalPnL = closed.reduce((a, t) => a + (t.realizedPnL || 0), 0);
 
-    let md = `# Trading Log — ${today}\n\n`;
-    md += `## Portfolio\n- **Equity:** $${p.equity.toFixed(2)}\n`;
-    md += `- **Offene Positionen:** ${p.openPositions.length}\n`;
-    md += `- **Win-Rate:** ${closed.length ? ((wins/closed.length)*100).toFixed(1) : 0}% (${wins}W/${losses}L)\n`;
-    md += `- **Gesamt PnL:** $${totalPnL.toFixed(2)}\n\n`;
+    // ── Indikatoren für alle Ticker holen ────────────────────────────
+    const tickersToSync = tickerOverride
+      ? [tickerOverride]
+      : [...new Set(['GC=F', ...p.openPositions.map(x => x.ticker)])];
 
-    if (p.openPositions.length > 0) {
-      md += `## Offene Positionen\n`;
-      for (const pos of p.openPositions) {
-        md += `- **${pos.ticker}** ${pos.direction} | Entry: $${pos.entryPrice} | SL: $${pos.sl} | TP: $${pos.tp} | ${pos.type.toUpperCase()} ${pos.leverage||''}x | Eröffnet: ${pos.openTime?.split('T')[0]}\n`;
+    const indSnapshots = {};
+    for (const t of tickersToSync) {
+      try {
+        const d   = await fetchPrice(t, '1y');
+        const ind = calcAllIndicators(d.history);
+        const reg = detectRegime(ind);
+        const cf  = calcConfluence(ind, reg);
+        const ses = getSessionInfo(t);
+        indSnapshots[t] = { ind, reg, cf, ses };
+      } catch {}
+    }
+
+    // ── Markdown aufbauen ─────────────────────────────────────────────
+    let md = `---\ntags: [trading, bot, ${today}]\ndatum: ${time}\n---\n\n`;
+    md += `# Trading Bot Status — ${time}\n\n`;
+
+    // Portfolio-Übersicht
+    md += `## Portfolio\n`;
+    md += `| Kennzahl | Wert |\n|---|---|\n`;
+    md += `| Equity | **$${p.equity.toFixed(2)}** |\n`;
+    md += `| Offene Positionen | ${p.openPositions.length} / ${p.settings.maxOpenTrades} |\n`;
+    md += `| Abgeschlossene Trades | ${closed.length} |\n`;
+    md += `| Win-Rate | ${closed.length ? ((wins/closed.length)*100).toFixed(1) : 0}% (${wins}W / ${closed.length - wins}L) |\n`;
+    md += `| Gesamt PnL | $${totalPnL.toFixed(2)} |\n\n`;
+
+    // Indikatoren-Snapshot pro Ticker
+    md += `## Markt-Indikatoren\n`;
+    for (const [ticker, snap] of Object.entries(indSnapshots)) {
+      const { ind, reg, cf, ses } = snap;
+      md += `\n### ${getMeta(ticker).name} (${ticker})\n`;
+      md += `| Indikator | Wert | Signal |\n|---|---|---|\n`;
+      md += `| Preis | $${ind.curr?.toFixed(2)} | — |\n`;
+      md += `| RSI 14 | ${ind.rsi?.toFixed(1)} | ${ind.rsi > 70 ? 'Overbought' : ind.rsi < 30 ? 'Oversold' : 'Neutral'} |\n`;
+      md += `| MACD Hist | ${ind.macd?.histogram?.toFixed(4)} | ${ind.macd?.histogram > 0 ? 'Bullish' : 'Bearish'} |\n`;
+      md += `| ADX | ${ind.adx?.adx?.toFixed(1)} | ${ind.adx?.trending ? 'Trending' : 'Ranging'} |\n`;
+      md += `| Stoch K/D | ${ind.stoch?.k?.toFixed(1)} / ${ind.stoch?.d?.toFixed(1)} | ${ind.stoch?.overbought ? 'Overbought' : ind.stoch?.oversold ? 'Oversold' : 'Neutral'} |\n`;
+      md += `| ATR | $${ind.atr?.toFixed(2)} | — |\n`;
+      md += `| Vol-Ratio | ×${ind.volR?.toFixed(2)} | ${ind.volR > 1.3 ? 'Hohes Volumen' : 'Normal'} |\n`;
+      md += `| SMA 20/50/200 | ${ind.sma20?.toFixed(0)}/${ind.sma50?.toFixed(0)}/${ind.sma200?.toFixed(0)} | — |\n`;
+      md += `| Momentum 20d | ${ind.mom20?.toFixed(1)}% | — |\n`;
+      md += `\n**Regime:** ${reg.toUpperCase()}  \n`;
+      md += `**Confluence:** ${cf.score}/${cf.maxScore} → **${cf.direction}** (${cf.strength})  \n`;
+      md += `**Session:** ${ses.label} (Qualität: ${(ses.quality*100).toFixed(0)}%)  \n`;
+      md += `**Tradeable:** ${cf.tradeable && ses.tradeable ? 'JA' : 'NEIN'}  \n\n`;
+
+      // Confluence-Signale
+      md += `**Confluence-Details:**\n`;
+      for (const sig of cf.signals) {
+        const icon = sig.bull === true ? '🟢' : sig.bull === false ? '🔴' : '⚪';
+        md += `- ${icon} **${sig.name}:** ${sig.val}\n`;
       }
       md += '\n';
     }
 
-    md += `## Letzte Trades\n| Ticker | Dir | Typ | Entry | Exit | PnL | Regime |\n|---|---|---|---|---|---|---|\n`;
-    for (const t of closed.slice(0, 20)) {
-      md += `| ${t.ticker} | ${t.direction} | ${t.type} | $${t.entryPrice} | $${t.exitPrice||'—'} | ${t.realizedPnL >= 0 ? '+' : ''}$${t.realizedPnL?.toFixed(2)} | ${t.regime} |\n`;
+    // Offene Positionen
+    if (p.openPositions.length > 0) {
+      md += `## Offene Positionen\n`;
+      md += `| # | Ticker | Dir | Typ | Hebel | Entry | SL | TP | Barrier | Margin | uPnL | Seit |\n`;
+      md += `|---|---|---|---|---|---|---|---|---|---|---|---|\n`;
+      for (const pos of p.openPositions) {
+        md += `| — | ${pos.ticker} | **${pos.direction}** | ${pos.type.toUpperCase()} | ${pos.leverage||'—'}x | $${pos.entryPrice} | $${pos.sl} | $${pos.tp} | ${pos.barrier ? '$'+pos.barrier?.toFixed(2) : '—'} | $${pos.margin?.toFixed(0)} | $${pos.unrealizedPnL?.toFixed(2)||'0'} | ${pos.openTime?.split('T')[0]} |\n`;
+      }
+      md += '\n';
     }
 
-    if (Object.keys(p.externalBots).length > 0) {
-      md += `\n## Externe Bots\n`;
-      for (const [name, bot] of Object.entries(p.externalBots)) {
-        md += `- **${name}:** ${bot.lastSignal||'—'} (${bot.lastSeen?.split('T')[0]||'—'})\n`;
+    // Letzte 50 abgeschlossene Trades
+    md += `## Trade-Historie (letzte 50)\n`;
+    md += `| Datum | Ticker | Dir | Typ | Entry | Exit | PnL | Grund | Conf | Regime |\n`;
+    md += `|---|---|---|---|---|---|---|---|---|---|\n`;
+    for (const t of closed.slice(0, 50)) {
+      const pnl = t.realizedPnL >= 0 ? `+$${t.realizedPnL?.toFixed(2)}` : `-$${Math.abs(t.realizedPnL||0).toFixed(2)}`;
+      md += `| ${t.openTime?.split('T')[0]} | ${t.ticker} | ${t.direction} | ${t.type} | $${t.entryPrice} | $${t.exitPrice||'—'} | ${pnl} | ${t.closeReason||'—'} | ${t.confluenceScore||'—'} | ${t.regime||'—'} |\n`;
+    }
+    md += '\n';
+
+    // Externe Bots
+    const extEntries = Object.entries(p.externalBots || {});
+    if (extEntries.length > 0) {
+      md += `## Externe Bots (Fleet)\n`;
+      md += `| Bot | Letztes Signal | Ticker | Zuletzt gesehen |\n|---|---|---|---|\n`;
+      for (const [name, bot] of extEntries) {
+        md += `| ${name} | ${bot.lastSignal||'—'} | ${bot.lastTicker||'—'} | ${bot.lastSeen?.split('T')[0]||'—'} |\n`;
+      }
+      md += '\n';
+    }
+
+    // Signal-Log (letzte 20)
+    if (signalLog.length > 0) {
+      md += `## Signal-Log (letzte 20)\n`;
+      md += `| Zeit | Ticker | Signal | Konfidenz | Confluence | Regime | Grund |\n|---|---|---|---|---|---|---|\n`;
+      for (const s of signalLog.slice(0, 20)) {
+        md += `| ${s.ts?.split('T')[0]} ${s.ts?.split('T')[1]?.slice(0,5)} | ${s.ticker||'—'} | ${s.signal||'—'} | ${s.confidence||'—'}% | ${s.confluenceScore||'—'} | ${s.regime||'—'} | ${s.reason||'—'} |\n`;
       }
     }
 
-    fs.writeFileSync(path.join(OBSIDIAN_TRADES, `trades-${today}.md`), md);
-    console.log('📁 Obsidian sync OK');
-    return true;
+    // Datei schreiben (täglich akkumulierend, eine Datei pro Tag)
+    const filePath = path.join(OBSIDIAN_TRADES, `${today}.md`);
+    fs.writeFileSync(filePath, md);
+    console.log(`📁 Obsidian sync → ${today}.md`);
+    return { ok: true, file: filePath, time };
   } catch (e) {
     console.error('Obsidian sync Fehler:', e.message);
-    return false;
+    return { ok: false, error: e.message };
   }
 }
+
+// Auto-Sync alle 15 Minuten
+setInterval(() => syncToObsidian(portfolio), 15 * 60 * 1000);
 
 // ── Positions aktualisieren (SL/TP check + PnL update) ───────────────────────
 async function updatePositions() {
@@ -1336,7 +1416,7 @@ function closePosition(id, exitPrice, reason = 'manual') {
   portfolio.openPositions.splice(idx, 1);
   if (portfolio.closedTrades.length > 500) portfolio.closedTrades.pop();
   savePortfolio(portfolio);
-  syncToObsidian(portfolio);
+  syncToObsidian(portfolio); // async, fire-and-forget
   console.log(`📊 Closed ${pos.ticker} ${pos.direction} → ${reason} | PnL: $${realPnL}`);
   return pos;
 }
@@ -1518,9 +1598,9 @@ app.get('/api/trades/stats', (req, res) => {
 });
 
 // Obsidian Sync manuell
-app.post('/api/trades/sync-obsidian', (req, res) => {
-  const ok = syncToObsidian(portfolio);
-  res.json({ ok, path: OBSIDIAN_TRADES });
+app.post('/api/trades/sync-obsidian', async (req, res) => {
+  const result = await syncToObsidian(portfolio, req.body?.ticker);
+  res.json({ ...result, folder: OBSIDIAN_TRADES });
 });
 
 // Equity zurücksetzen / Portfolio resetten
