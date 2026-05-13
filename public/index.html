@@ -23,9 +23,12 @@
 <div id="globe-container">
   <div id="globe-wrap"></div>
 
+  <!-- Regime Badge on Globe -->
+  <div id="regime-badge"></div>
+
   <!-- Legend -->
   <div id="legend">
-    <div class="legend-title">Einfluss auf Gold</div>
+    <div class="legend-title" id="legend-title">Einfluss auf Asset</div>
     <div class="legend-item"><div class="legend-color" style="background:#00aa44"></div><span>Sehr bullish</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#88cc00"></div><span>Bullish</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ffcc00"></div><span>Neutral</span></div>
@@ -75,34 +78,64 @@
     </div>
   </div>
 
+  <!-- Confluence Meter -->
+  <div id="confluence-bar">
+    <div id="confluence-label">Confluence — Lade...</div>
+    <div id="confluence-track">
+      <div id="confluence-fill"></div>
+      <div id="confluence-neutral"></div>
+    </div>
+    <div id="confluence-meta"></div>
+  </div>
+
   <!-- Tabs -->
   <div id="tabs">
-    <div class="tab active" data-tab="events">Events</div>
+    <div class="tab active" data-tab="analytics">Analytics</div>
     <div class="tab" data-tab="signal">Signal</div>
+    <div class="tab" data-tab="events">Events</div>
     <div class="tab" data-tab="dashboard">Bot</div>
   </div>
 
-  <!-- Events Tab -->
-  <div class="tab-content active" id="tab-events">
-    <div id="events-list">
-      <div class="loading-msg">Lade Events...</div>
+  <!-- Analytics Tab -->
+  <div class="tab-content active" id="tab-analytics">
+    <div id="analytics-content">
+      <div class="loading-msg">Lade Indikatoren...</div>
     </div>
   </div>
 
   <!-- Signal Tab -->
   <div class="tab-content" id="tab-signal">
-    <div style="padding:12px 0">
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <select id="signal-strategie" style="flex:1;background:#0a1628;border:1px solid #1e3a5a;color:#c0d0e8;padding:6px 8px;border-radius:6px;font-size:12px">
+    <div style="padding:10px 0">
+      <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center">
+        <select id="signal-strategie" style="flex:1;background:#0a1628;border:1px solid #1e3a5a;color:#c0d0e8;padding:6px 8px;border-radius:6px;font-size:11px">
           <option value="goldglobe">GoldGlobe KI</option>
           <option value="mittel">Mittel</option>
           <option value="aggressiv">Aggressiv</option>
         </select>
-        <button onclick="sendSignal(true)" style="background:rgba(60,100,160,0.2);border:1px solid #1e3a5a;color:#8090a8;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer">Dry Run</button>
-        <button onclick="sendSignal(false)" style="background:rgba(68,204,136,0.15);border:1px solid #44cc88;color:#44cc88;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer">Signal</button>
+        <button onclick="sendSignal(true)" class="btn-ghost">Test</button>
+        <button onclick="sendSignal(false)" class="btn-primary">Signal</button>
       </div>
       <div id="signal-output" style="font-size:12px;min-height:60px"></div>
-      <div id="signal-log" style="font-size:10px;color:#4a6080;margin-top:8px;max-height:120px;overflow-y:auto"></div>
+
+      <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px">
+        <div style="font-size:10px;color:#4a6080;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Auto-Signal</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+          <input id="auto-interval" type="number" value="60" min="5" max="1440"
+            style="width:60px;background:#0a1628;border:1px solid #1e3a5a;color:#c0d0e8;padding:5px;border-radius:6px;font-size:11px">
+          <span style="font-size:11px;color:#4a6080">Min</span>
+          <button id="auto-btn" onclick="toggleAuto()" class="btn-ghost" style="flex:1">▶ Start</button>
+        </div>
+        <div id="auto-status" style="font-size:10px;color:#44cc88"></div>
+      </div>
+
+      <div id="signal-log" style="font-size:10px;color:#4a6080;margin-top:8px;max-height:100px;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- Events Tab -->
+  <div class="tab-content" id="tab-events">
+    <div id="events-list">
+      <div class="loading-msg">Lade Events...</div>
     </div>
   </div>
 
