@@ -7,6 +7,53 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☁️</text></svg>" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
+    /* ── Auth Screen ── */
+    #authScreen {
+      position: fixed; inset: 0; z-index: 999;
+      background: #0d1117;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #authScreen.hidden { display: none; }
+    .auth-box {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 12px; padding: 36px 32px; width: 340px;
+      text-align: center;
+    }
+    .auth-box .cloud-icon { font-size: 40px; margin-bottom: 12px; }
+    .auth-box h2 { color: #c9d1d9; margin: 0 0 6px; font-size: 20px; }
+    .auth-box p { color: #8b949e; font-size: 13px; margin: 0 0 20px; }
+    .auth-box input {
+      width: 100%; padding: 10px 14px; font-size: 18px; letter-spacing: 4px;
+      text-align: center; border-radius: 6px;
+      background: #0d1117; color: #c9d1d9;
+      border: 1px solid #30363d; outline: none;
+      font-family: ui-monospace, monospace;
+      transition: border-color 0.2s;
+    }
+    .auth-box input:focus { border-color: #f5c518; }
+    .auth-box input.error { border-color: #f85149; animation: shake 0.3s; }
+    .auth-btn {
+      margin-top: 14px; width: 100%; padding: 10px;
+      background: #f5c518; color: #000; font-weight: 700;
+      border: none; border-radius: 6px; font-size: 15px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .auth-btn:hover { background: #b48f1a; }
+    .auth-error { color: #f85149; font-size: 13px; margin-top: 10px; min-height: 18px; }
+    .auth-step-indicator {
+      display: flex; justify-content: center; gap: 8px; margin-bottom: 20px;
+    }
+    .auth-step-indicator span {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #30363d; transition: background 0.3s;
+    }
+    .auth-step-indicator span.active { background: #f5c518; }
+    .auth-step-indicator span.done { background: #3fb950; }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
     :root {
       --bg: #0d1117;
       --bg-elev: #161b22;
@@ -163,6 +210,22 @@
 </head>
 <body>
 
+<!-- Auth Screen -->
+<div id="authScreen">
+  <div class="auth-box">
+    <div class="cloud-icon">☁️</div>
+    <div class="auth-step-indicator">
+      <span id="step1dot" class="active"></span>
+      <span id="step2dot"></span>
+    </div>
+    <h2 id="authTitle">PIN eingeben</h2>
+    <p id="authSubtitle">Schritt 1 von 2 – dein PIN</p>
+    <input type="password" id="authInput" placeholder="• • • • •" maxlength="16" autocomplete="off" inputmode="numeric" />
+    <button class="auth-btn" id="authBtn">Weiter →</button>
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
 <div class="app" id="app">
 
   <aside class="sidebar">
@@ -232,6 +295,81 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// ── Auth ──────────────────────────────────────────────────────────────
+const PIN_HASH  = "6ac10f60bdd13dca63a780c00a0ffe7431bfa7d5c71aa613621c1f6ca7c64648";
+const PASS_HASH = "650c3b878493d086cbcc4755bcf4ffc681cc0f6d7fdb8f6ebbb3b65ab76ec3f9";
+const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
+function checkSession() {
+  const ts = sessionStorage.getItem("cloud_auth_ts");
+  return ts && (Date.now() - parseInt(ts)) < SESSION_DURATION;
+}
+
+function startSession() {
+  sessionStorage.setItem("cloud_auth_ts", Date.now().toString());
+  document.getElementById("authScreen").classList.add("hidden");
+  loadDir(ROOT);
+}
+
+let authStep = 1;
+
+async function handleAuth() {
+  const input = document.getElementById("authInput");
+  const error = document.getElementById("authError");
+  const val = input.value.trim();
+  if (!val) return;
+  const hash = await sha256(val);
+
+  if (authStep === 1) {
+    if (hash === PIN_HASH) {
+      // Step 1 passed → go to step 2
+      authStep = 2;
+      input.value = "";
+      input.inputMode = "text";
+      input.style.letterSpacing = "2px";
+      document.getElementById("authTitle").textContent = "Passwort eingeben";
+      document.getElementById("authSubtitle").textContent = "Schritt 2 von 2 – dein Passwort";
+      document.getElementById("authBtn").textContent = "Einloggen →";
+      document.getElementById("step1dot").className = "done";
+      document.getElementById("step2dot").className = "active";
+      error.textContent = "";
+      input.focus();
+    } else {
+      input.classList.add("error");
+      error.textContent = "Falscher PIN. Bitte erneut versuchen.";
+      input.value = "";
+      setTimeout(() => input.classList.remove("error"), 400);
+    }
+  } else {
+    if (hash === PASS_HASH) {
+      startSession();
+    } else {
+      input.classList.add("error");
+      error.textContent = "Falsches Passwort. Bitte erneut versuchen.";
+      input.value = "";
+      setTimeout(() => input.classList.remove("error"), 400);
+    }
+  }
+}
+
+document.getElementById("authBtn").onclick = handleAuth;
+document.getElementById("authInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") handleAuth();
+});
+
+// Check existing session
+if (checkSession()) {
+  document.getElementById("authScreen").classList.add("hidden");
+} else {
+  document.getElementById("authInput").focus();
+}
+// ── End Auth ───────────────────────────────────────────────────────────
+
 const REPO_OWNER = "miethigmilo-art";
 const REPO_NAME = "gold-globe";
 const BRANCH = "main";
@@ -498,8 +636,8 @@ document.querySelectorAll(".modal-bg").forEach(m => {
   m.onclick = (e) => { if (e.target === m) m.classList.remove("show"); };
 });
 
-// Initial load
-loadDir(ROOT);
+// Initial load (only if already authenticated)
+if (checkSession()) loadDir(ROOT);
 </script>
 
 </body>
