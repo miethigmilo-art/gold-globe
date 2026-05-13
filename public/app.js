@@ -409,13 +409,198 @@ function toggleAuto() {
   addLog(`Auto gestartet (alle ${mins} Min)`, false);
 }
 
+// ── Positions Tab ─────────────────────────────────────────────────────────────
+async function loadPositions() {
+  try {
+    const [posR, statsR] = await Promise.all([
+      fetch('/api/positions'),
+      fetch('/api/trades/stats')
+    ]);
+    const posData   = await posR.json();
+    const statsData = await statsR.json();
+
+    // Equity
+    const eq = document.getElementById('portfolio-equity');
+    if (eq) eq.textContent = `$${(posData.equity || 0).toFixed(2)}`;
+
+    const st = document.getElementById('portfolio-stats');
+    if (st && statsData.winRate) {
+      st.innerHTML = `<span style="color:#44cc88">${statsData.winRate} WR</span> · <span style="color:${parseFloat(statsData.totalPnL)>=0?'#44cc88':'#ff4444'}">$${parseFloat(statsData.totalPnL||0).toFixed(2)} PnL</span>`;
+    }
+
+    // Open Positions
+    const ol = document.getElementById('open-positions-list');
+    if (ol) {
+      if (!posData.positions?.length) {
+        ol.innerHTML = '<div style="color:#4a6080;font-size:11px;padding:6px 0">Keine offenen Positionen</div>';
+      } else {
+        ol.innerHTML = posData.positions.map(pos => {
+          const pnlColor = pos.unrealizedPnL >= 0 ? '#44cc88' : '#ff4444';
+          const dirColor = pos.direction === 'BUY' ? '#44cc88' : '#ff4444';
+          const typeTag  = pos.type === 'knockout' ? `<span style="color:#ff8844;font-size:9px">KO×${pos.leverage}</span>` : `<span style="color:#60a5fa;font-size:9px">CFD×${pos.leverage}</span>`;
+          return `<div class="pos-card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <span style="font-weight:700;color:${dirColor}">${pos.direction}</span>
+                <span style="color:#e0e8f8;font-size:12px;margin-left:6px">${pos.name||pos.ticker}</span>
+                ${typeTag}
+                ${pos.source && pos.source !== 'goldglobe' ? `<span style="color:#f472b6;font-size:9px;margin-left:4px">[${pos.source}]</span>` : ''}
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:${pnlColor}">
+                ${pos.unrealizedPnL >= 0 ? '+' : ''}$${(pos.unrealizedPnL||0).toFixed(2)}
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;margin-top:5px;font-size:10px;color:#6090b0">
+              <span>Entry: $${pos.entryPrice?.toFixed(2)}</span>
+              <span style="color:#ff4444">SL: $${pos.sl}</span>
+              <span style="color:#44cc88">TP: $${pos.tp}</span>
+              ${pos.barrier ? `<span style="color:#ff8844">KO: $${pos.barrier?.toFixed(2)}</span>` : ''}
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:10px;color:#4a6080">
+              <span>${pos.openTime?.split('T')[0]} · ${(pos.margin||0).toFixed(0)}$ Margin</span>
+              <button onclick="closePos('${pos.id}')" style="background:none;border:none;color:#ff6666;font-size:10px;cursor:pointer">✕ Schließen</button>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    // History
+    await loadTradeHistory();
+  } catch (e) {
+    const ol = document.getElementById('open-positions-list');
+    if (ol) ol.innerHTML = `<div style="color:#ff6666;font-size:11px">Fehler: ${e.message}</div>`;
+  }
+}
+
+async function loadTradeHistory() {
+  try {
+    const r = await fetch('/api/trades/history?limit=30');
+    const d = await r.json();
+    const hl = document.getElementById('trade-history-list');
+    if (!hl) return;
+    if (!d.trades?.length) { hl.innerHTML = '<div style="color:#4a6080;font-size:11px">Keine Trades</div>'; return; }
+    hl.innerHTML = d.trades.map(t => {
+      const pnlColor = (t.realizedPnL||0) >= 0 ? '#44cc88' : '#ff4444';
+      const dir      = t.direction === 'BUY' ? '▲' : '▼';
+      return `<div class="history-row">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:11px">
+            <span style="color:${t.direction==='BUY'?'#44cc88':'#ff4444'}">${dir}</span>
+            <span style="color:#c0d0e8;margin-left:4px">${t.name||t.ticker}</span>
+            <span style="font-size:9px;color:#6090b0;margin-left:4px">${t.type?.toUpperCase()||''}</span>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:${pnlColor}">
+            ${(t.realizedPnL||0)>=0?'+':''}$${(t.realizedPnL||0).toFixed(2)}
+          </div>
+        </div>
+        <div style="font-size:9px;color:#4a6080;margin-top:2px">
+          ${t.openTime?.split('T')[0]} → ${t.closeTime?.split('T')[0]||'—'} · ${t.closeReason||'manual'} · Conf:${t.confluenceScore||'—'}
+        </div>
+      </div>`;
+    }).join('');
+  } catch {}
+}
+
+async function closePos(id) {
+  try {
+    await fetch(`/api/positions/${id}/close`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    loadPositions();
+  } catch(e) { alert('Fehler: ' + e.message); }
+}
+
+async function closeAllPositions() {
+  if (!confirm('Alle Positionen schließen?')) return;
+  await fetch('/api/positions/close-all', { method: 'POST' });
+  loadPositions();
+}
+
+async function syncObsidian() {
+  const r = await fetch('/api/trades/sync-obsidian', { method: 'POST' });
+  const d = await r.json();
+  alert(d.ok ? '📁 Obsidian sync OK: ' + d.path : 'Fehler: ' + d.error);
+}
+
+// ── Trade Modal ───────────────────────────────────────────────────────────────
+function openPositionModal() {
+  const modal = document.getElementById('trade-modal');
+  modal.style.display = 'flex';
+  // Ticker-Optionen füllen
+  const sel = document.getElementById('trade-ticker');
+  const tickers = ['GC=F','SI=F','CL=F','SPY','QQQ','AAPL','NVDA','BTC-USD','ETH-USD'];
+  sel.innerHTML = tickers.map(t => `<option value="${t}" ${t===currentTicker?'selected':''}>${t}</option>`).join('');
+}
+function closeTradeModal() { document.getElementById('trade-modal').style.display = 'none'; }
+
+async function submitTrade() {
+  const ticker    = document.getElementById('trade-ticker').value;
+  const direction = document.getElementById('trade-direction').value;
+  const type      = document.getElementById('trade-type').value;
+  const leverage  = parseInt(document.getElementById('trade-leverage').value) || 10;
+  const invest    = parseFloat(document.getElementById('trade-invest').value) || 200;
+
+  try {
+    const r = await fetch('/api/positions/open', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ ticker, direction, type, leverage, invest, source: 'goldglobe' })
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    closeTradeModal();
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector('[data-tab="positions"]').classList.add('active');
+    document.getElementById('tab-positions').classList.add('active');
+    loadPositions();
+  } catch (e) { alert('Fehler: ' + e.message); }
+}
+
+// ── Fleet (Externe Bots) ──────────────────────────────────────────────────────
+async function loadFleet() {
+  try {
+    const r = await fetch('/api/fleet');
+    const d = await r.json();
+    const el = document.getElementById('fleet-status');
+    if (!el) return;
+    const bots = Object.entries(d.externalBots || {});
+    if (!bots.length) { el.textContent = 'Keine externen Bots registriert'; return; }
+    el.innerHTML = bots.map(([name, b]) => `
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <span style="color:#f472b6;font-size:10px">${name}</span>
+        <span style="color:${b.lastSignal==='BUY'?'#44cc88':b.lastSignal==='SELL'?'#ff4444':'#ffcc00'};font-size:10px">${b.lastSignal||'—'} ${b.lastTicker||''}</span>
+        <span style="color:#4a6080;font-size:9px">${b.lastSeen?.split('T')[0]||'—'}</span>
+      </div>
+    `).join('');
+  } catch {}
+}
+
+async function syncGDrive() {
+  const url = document.getElementById('gdrive-url')?.value?.trim();
+  if (!url) { alert('Bitte Google Sheet CSV-URL eingeben'); return; }
+  try {
+    const r = await fetch('/api/fleet/gdrive-sync', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ sheetUrl: url, botName: 'gdrive-bot' })
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    loadFleet();
+    alert(`✅ Google Drive sync OK. Letztes Signal: ${d.latest?.signal || '—'}`);
+  } catch (e) { alert('Fehler: ' + e.message); }
+}
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     tab.classList.add('active');
-    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    const id = 'tab-' + tab.dataset.tab;
+    document.getElementById(id).classList.add('active');
+
+    if (tab.dataset.tab === 'positions') loadPositions();
+    if (tab.dataset.tab === 'signal')    loadFleet();
+    if (tab.dataset.tab === 'neural')    { if (window.initNeuralViz) window.initNeuralViz(); }
   });
 });
 
@@ -430,7 +615,7 @@ async function init() {
   loadGoldPrice();
   loadIndicators();
   setInterval(loadGoldPrice, 300000);
-  setInterval(loadIndicators, 120000); // Indikatoren alle 2min
+  setInterval(loadIndicators, 120000);
 
   Promise.all([
     fetch(`/api/countries?ticker=${encodeURIComponent(currentTicker)}`).then(r=>r.json()).catch(()=>({})),

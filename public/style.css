@@ -729,3 +729,27 @@ body {
   font-family: var(--ui);
 }
 .btn-ghost:hover { border-color: #2a5070; color: #c0d0e8; }
+
+/* ── Position Cards ──────────────────────────────────── */
+.pos-card {
+  background: rgba(12,20,40,0.8);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-bottom: 6px;
+  transition: border-color var(--transition);
+}
+.pos-card:hover { border-color: rgba(255,255,255,0.14); }
+
+/* ── History Rows ────────────────────────────────────── */
+.history-row {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.history-row:last-child { border-bottom: none; }
+
+/* ── Neural Canvas ────────────────────────────────────── */
+#neural-canvas {
+  display: block;
+  background: transparent;
+}

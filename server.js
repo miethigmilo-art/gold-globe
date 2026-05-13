@@ -1144,4 +1144,538 @@ app.get('/api/geojson', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ════════════════════════════════════════════════════════════════════
+// PORTFOLIO MANAGER — Leverage, Knockout, Multi-Trade
+// ════════════════════════════════════════════════════════════════════
+
+const PORTFOLIO_FILE  = path.join(__dirname, 'portfolio.json');
+const OBSIDIAN_TRADES = path.join(__dirname, 'cloud', 'obsidian', 'trading');
+
+const DEFAULT_PORTFOLIO = {
+  equity: 10000,
+  openPositions: [],
+  closedTrades: [],
+  externalBots: {},
+  neuralState: {},
+  settings: {
+    maxOpenTrades: 5,
+    maxTotalMarginPct: 0.30,
+    maxRiskPerTrade: 0.02,
+    defaultLeverage: 10,
+    defaultType: 'cfd',
+  }
+};
+
+function loadPortfolio() {
+  try { return JSON.parse(fs.readFileSync(PORTFOLIO_FILE, 'utf8')); }
+  catch { return JSON.parse(JSON.stringify(DEFAULT_PORTFOLIO)); }
+}
+function savePortfolio(p) {
+  fs.writeFileSync(PORTFOLIO_FILE, JSON.stringify(p, null, 2));
+}
+
+let portfolio = loadPortfolio();
+
+// ── Leverage / Knockout Berechnung ───────────────────────────────────────────
+function calcLeverageParams(ticker, direction, currentPrice, leverage, type, equityBudget, atr) {
+  const meta = getMeta(ticker);
+
+  if (type === 'knockout') {
+    // Knockout-Zertifikat (Turbo/Mini-Future)
+    // Barrier = Finanzierungslevel → bei Long: unter aktuellem Preis
+    // Empfehlung: Barrier mindestens 3×ATR entfernt (Schutz vor Rauschen)
+    const safetyBuffer = Math.max(atr * 3, currentPrice * 0.05);
+    const barrier      = direction === 'BUY'
+      ? currentPrice - safetyBuffer
+      : currentPrice + safetyBuffer;
+    const intrinsicVal = direction === 'BUY'
+      ? currentPrice - barrier
+      : barrier - currentPrice;
+    const effectiveLev = currentPrice / intrinsicVal;
+    const ratio        = 0.1; // 1 Zertifikat = 0.1 Einheit Underlying
+    const certPrice    = intrinsicVal * ratio;
+
+    // Kapitaleinsatz: equityBudget = invested EUR
+    const numCerts     = equityBudget / certPrice;
+    const units        = numCerts * ratio;
+    const notional     = units * currentPrice;
+    const margin       = equityBudget; // bei KO = volles Risiko
+
+    // SL = Barrier + kleiner Sicherheitsabstand (auto-close vor echtem KO)
+    const slBuffer     = atr * 0.3;
+    const sl           = direction === 'BUY' ? barrier + slBuffer : barrier - slBuffer;
+    const tp           = direction === 'BUY'
+      ? currentPrice + intrinsicVal * effectiveLev * 0.4
+      : currentPrice - intrinsicVal * effectiveLev * 0.4;
+
+    return { type: 'knockout', barrier, intrinsicVal, effectiveLev: parseFloat(effectiveLev.toFixed(1)),
+             certPrice, numCerts: parseFloat(numCerts.toFixed(0)), ratio,
+             units, notional, margin, sl: parseFloat(sl.toFixed(2)), tp: parseFloat(tp.toFixed(2)),
+             maxLoss: equityBudget, note: `KO bei $${barrier.toFixed(2)}` };
+  }
+
+  // ── CFD ──────────────────────────────────────────────────────────
+  const margin   = equityBudget;
+  const notional = margin * leverage;
+  const units    = notional / currentPrice;
+
+  // ATR-basiertes SL/TP
+  const slDist   = atr * 1.5;
+  const tpDist   = atr * 2.5;
+  const sl       = direction === 'BUY' ? currentPrice - slDist : currentPrice + slDist;
+  const tp       = direction === 'BUY' ? currentPrice + tpDist : currentPrice - tpDist;
+  const maxLoss  = units * slDist; // Verlust wenn SL trifft (ohne Leverage-Schutz)
+
+  return { type: 'cfd', leverage, units: parseFloat(units.toFixed(4)),
+           notional: parseFloat(notional.toFixed(2)), margin,
+           sl: parseFloat(sl.toFixed(2)), tp: parseFloat(tp.toFixed(2)),
+           maxLoss: parseFloat(maxLoss.toFixed(2)), rr: parseFloat((tpDist/slDist).toFixed(2)) };
+}
+
+// ── Unrealized P&L berechnen ─────────────────────────────────────────────────
+function calcUnrealizedPnL(pos, currentPrice) {
+  const diff = pos.direction === 'BUY'
+    ? currentPrice - pos.entryPrice
+    : pos.entryPrice - currentPrice;
+  return parseFloat((diff * pos.units).toFixed(2));
+}
+
+// ── Obsidian-Sync ─────────────────────────────────────────────────────────────
+function syncToObsidian(p) {
+  try {
+    fs.mkdirSync(OBSIDIAN_TRADES, { recursive: true });
+    const today  = new Date().toISOString().split('T')[0];
+    const closed = p.closedTrades.slice(0, 50);
+
+    const wins   = closed.filter(t => t.realizedPnL > 0).length;
+    const losses = closed.filter(t => t.realizedPnL <= 0).length;
+    const totalPnL = closed.reduce((a, t) => a + (t.realizedPnL || 0), 0);
+
+    let md = `# Trading Log — ${today}\n\n`;
+    md += `## Portfolio\n- **Equity:** $${p.equity.toFixed(2)}\n`;
+    md += `- **Offene Positionen:** ${p.openPositions.length}\n`;
+    md += `- **Win-Rate:** ${closed.length ? ((wins/closed.length)*100).toFixed(1) : 0}% (${wins}W/${losses}L)\n`;
+    md += `- **Gesamt PnL:** $${totalPnL.toFixed(2)}\n\n`;
+
+    if (p.openPositions.length > 0) {
+      md += `## Offene Positionen\n`;
+      for (const pos of p.openPositions) {
+        md += `- **${pos.ticker}** ${pos.direction} | Entry: $${pos.entryPrice} | SL: $${pos.sl} | TP: $${pos.tp} | ${pos.type.toUpperCase()} ${pos.leverage||''}x | Eröffnet: ${pos.openTime?.split('T')[0]}\n`;
+      }
+      md += '\n';
+    }
+
+    md += `## Letzte Trades\n| Ticker | Dir | Typ | Entry | Exit | PnL | Regime |\n|---|---|---|---|---|---|---|\n`;
+    for (const t of closed.slice(0, 20)) {
+      md += `| ${t.ticker} | ${t.direction} | ${t.type} | $${t.entryPrice} | $${t.exitPrice||'—'} | ${t.realizedPnL >= 0 ? '+' : ''}$${t.realizedPnL?.toFixed(2)} | ${t.regime} |\n`;
+    }
+
+    if (Object.keys(p.externalBots).length > 0) {
+      md += `\n## Externe Bots\n`;
+      for (const [name, bot] of Object.entries(p.externalBots)) {
+        md += `- **${name}:** ${bot.lastSignal||'—'} (${bot.lastSeen?.split('T')[0]||'—'})\n`;
+      }
+    }
+
+    fs.writeFileSync(path.join(OBSIDIAN_TRADES, `trades-${today}.md`), md);
+    console.log('📁 Obsidian sync OK');
+    return true;
+  } catch (e) {
+    console.error('Obsidian sync Fehler:', e.message);
+    return false;
+  }
+}
+
+// ── Positions aktualisieren (SL/TP check + PnL update) ───────────────────────
+async function updatePositions() {
+  if (!portfolio.openPositions.length) return;
+  const toClose = [];
+
+  for (const pos of portfolio.openPositions) {
+    try {
+      const d  = await fetchPrice(pos.ticker, '5d');
+      const cp = d.current.price;
+      pos.currentPrice   = cp;
+      pos.unrealizedPnL  = calcUnrealizedPnL(pos, cp);
+
+      // Knockout-Check
+      if (pos.type === 'knockout' && pos.barrier) {
+        const koHit = pos.direction === 'BUY' ? cp <= pos.barrier : cp >= pos.barrier;
+        if (koHit) { pos.closeReason = 'KNOCKOUT'; pos.exitPrice = pos.barrier; toClose.push(pos); continue; }
+      }
+      // SL/TP Check
+      const slHit = pos.direction === 'BUY' ? cp <= pos.sl : cp >= pos.sl;
+      const tpHit = pos.direction === 'BUY' ? cp >= pos.tp : cp <= pos.tp;
+      if (slHit) { pos.closeReason = 'SL'; pos.exitPrice = pos.sl; toClose.push(pos); }
+      else if (tpHit) { pos.closeReason = 'TP'; pos.exitPrice = pos.tp; toClose.push(pos); }
+    } catch {}
+  }
+
+  for (const pos of toClose) {
+    closePosition(pos.id, pos.exitPrice, pos.closeReason);
+  }
+  savePortfolio(portfolio);
+}
+
+function closePosition(id, exitPrice, reason = 'manual') {
+  const idx = portfolio.openPositions.findIndex(p => p.id === id);
+  if (idx === -1) return null;
+  const pos       = portfolio.openPositions[idx];
+  const diff      = pos.direction === 'BUY' ? exitPrice - pos.entryPrice : pos.entryPrice - exitPrice;
+  const realPnL   = parseFloat((diff * pos.units).toFixed(2));
+
+  pos.exitPrice    = exitPrice;
+  pos.realizedPnL  = realPnL;
+  pos.closeReason  = reason;
+  pos.closeTime    = new Date().toISOString();
+  pos.status       = 'closed';
+  pos.outcome      = realPnL > 0 ? 'WIN' : 'LOSS';
+
+  portfolio.equity          += realPnL;
+  portfolio.closedTrades.unshift(pos);
+  portfolio.openPositions.splice(idx, 1);
+  if (portfolio.closedTrades.length > 500) portfolio.closedTrades.pop();
+  savePortfolio(portfolio);
+  syncToObsidian(portfolio);
+  console.log(`📊 Closed ${pos.ticker} ${pos.direction} → ${reason} | PnL: $${realPnL}`);
+  return pos;
+}
+
+// SL/TP-Check alle 60s
+setInterval(updatePositions, 60000);
+
+// ── PORTFOLIO ROUTES ──────────────────────────────────────────────────────────
+
+// Übersicht
+app.get('/api/portfolio', (req, res) => {
+  const p = portfolio;
+  const closed = p.closedTrades;
+  const wins   = closed.filter(t => t.realizedPnL > 0).length;
+  const totalPnL = closed.reduce((a, t) => a + (t.realizedPnL || 0), 0);
+  const totalMargin = p.openPositions.reduce((a, pos) => a + (pos.margin || 0), 0);
+  res.json({
+    equity: p.equity,
+    totalMargin,
+    marginPct: p.equity ? (totalMargin / p.equity * 100).toFixed(1) + '%' : '0%',
+    openCount: p.openPositions.length,
+    totalTrades: closed.length,
+    wins, losses: closed.length - wins,
+    winRate: closed.length ? ((wins / closed.length) * 100).toFixed(1) + '%' : '—',
+    totalPnL: totalPnL.toFixed(2),
+    settings: p.settings,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Position öffnen
+app.post('/api/positions/open', async (req, res) => {
+  const { ticker = 'GC=F', direction, type = 'cfd', leverage, invest, strategie = 'manual', source = 'goldglobe', overrideChecks = false } = req.body;
+  if (!direction) return res.status(400).json({ error: 'direction required' });
+
+  const p   = portfolio;
+  const lev = leverage || p.settings.defaultLeverage;
+  const eq  = p.equity;
+
+  // Max-Trade-Check
+  if (!overrideChecks && p.openPositions.length >= p.settings.maxOpenTrades)
+    return res.status(400).json({ error: `Max ${p.settings.maxOpenTrades} offene Trades` });
+
+  // Margin-Budget
+  const budget = invest || (eq * p.settings.maxRiskPerTrade);
+  const totalMargin = p.openPositions.reduce((a, pos) => a + (pos.margin || 0), 0);
+  if (!overrideChecks && (totalMargin + budget) / eq > p.settings.maxTotalMarginPct)
+    return res.status(400).json({ error: `Margin-Limit erreicht (${(p.settings.maxTotalMarginPct*100)}%)` });
+
+  try {
+    const priceData = await fetchPrice(ticker, '1y');
+    const ind       = calcAllIndicators(priceData.history);
+    const regime    = detectRegime(ind);
+    const conf      = calcConfluence(ind, regime);
+    const lp        = calcLeverageParams(ticker, direction, ind.curr, lev, type, budget, ind.atr);
+
+    const pos = {
+      id:             `pos_${Date.now()}`,
+      ticker,         name: getMeta(ticker).name,
+      direction,      type,
+      leverage:       lp.effectiveLev || lev,
+      entryPrice:     ind.curr,
+      currentPrice:   ind.curr,
+      units:          lp.units,
+      margin:         budget,
+      notional:       lp.notional,
+      sl:             lp.sl,
+      tp:             lp.tp,
+      barrier:        lp.barrier || null,
+      certPrice:      lp.certPrice || null,
+      rr:             lp.rr || null,
+      confluenceScore: conf.score,
+      regime,
+      openTime:       new Date().toISOString(),
+      closeTime:      null,
+      status:         'open',
+      unrealizedPnL:  0,
+      realizedPnL:    null,
+      strategie,
+      source,
+      leverageParams: lp,
+    };
+
+    p.openPositions.push(pos);
+    savePortfolio(p);
+    res.json({ ok: true, position: pos });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Offene Positionen (mit aktuellem Preis)
+app.get('/api/positions', async (req, res) => {
+  // Preise aktualisieren
+  await updatePositions();
+  res.json({ positions: portfolio.openPositions, equity: portfolio.equity });
+});
+
+// Position schließen
+app.post('/api/positions/:id/close', (req, res) => {
+  const { exitPrice } = req.body;
+  const pos = portfolio.openPositions.find(p => p.id === req.params.id);
+  if (!pos) return res.status(404).json({ error: 'Position nicht gefunden' });
+  const exit = exitPrice || pos.currentPrice || pos.entryPrice;
+  const closed = closePosition(req.params.id, exit, 'manual');
+  res.json({ ok: true, trade: closed });
+});
+
+// Alle schließen
+app.post('/api/positions/close-all', async (req, res) => {
+  await updatePositions();
+  const ids = portfolio.openPositions.map(p => p.id);
+  const closed = [];
+  for (const id of ids) {
+    const pos = portfolio.openPositions.find(p => p.id === id);
+    if (pos) closed.push(closePosition(id, pos.currentPrice || pos.entryPrice, 'manual_all'));
+  }
+  res.json({ ok: true, closed: closed.length });
+});
+
+// SL/TP anpassen
+app.post('/api/positions/:id/update-sltp', (req, res) => {
+  const { sl, tp } = req.body;
+  const pos = portfolio.openPositions.find(p => p.id === req.params.id);
+  if (!pos) return res.status(404).json({ error: 'nicht gefunden' });
+  if (sl) pos.sl = sl;
+  if (tp) pos.tp = tp;
+  savePortfolio(portfolio);
+  res.json({ ok: true, position: pos });
+});
+
+// Trade-Historie
+app.get('/api/trades/history', (req, res) => {
+  const limit  = parseInt(req.query.limit) || 100;
+  const ticker = req.query.ticker || null;
+  let trades   = portfolio.closedTrades.slice(0, limit);
+  if (ticker) trades = trades.filter(t => t.ticker === ticker);
+  res.json({ trades, total: portfolio.closedTrades.length });
+});
+
+// Trade-Statistiken
+app.get('/api/trades/stats', (req, res) => {
+  const trades = portfolio.closedTrades;
+  if (!trades.length) return res.json({ message: 'Keine Trades' });
+  const wins       = trades.filter(t => t.realizedPnL > 0);
+  const losses     = trades.filter(t => t.realizedPnL <= 0);
+  const totalPnL   = trades.reduce((a, t) => a + (t.realizedPnL || 0), 0);
+  const grossWin   = wins.reduce((a, t) => a + t.realizedPnL, 0);
+  const grossLoss  = Math.abs(losses.reduce((a, t) => a + t.realizedPnL, 0));
+  const avgWin     = wins.length ? grossWin / wins.length : 0;
+  const avgLoss    = losses.length ? grossLoss / losses.length : 0;
+  const profFactor = grossLoss > 0 ? grossWin / grossLoss : null;
+
+  // Nach Typ aufschlüsseln
+  const byType = {};
+  for (const t of trades) {
+    if (!byType[t.type]) byType[t.type] = { count: 0, wins: 0, pnl: 0 };
+    byType[t.type].count++; byType[t.type].pnl += t.realizedPnL || 0;
+    if (t.realizedPnL > 0) byType[t.type].wins++;
+  }
+
+  // Max Drawdown auf Equity-Kurve
+  let peak = 10000, dd = 0, runEq = 10000;
+  for (const t of [...trades].reverse()) {
+    runEq += t.realizedPnL || 0;
+    if (runEq > peak) peak = runEq;
+    const d = (peak - runEq) / peak * 100;
+    if (d > dd) dd = d;
+  }
+
+  res.json({
+    totalTrades: trades.length,
+    wins: wins.length, losses: losses.length,
+    winRate: ((wins.length / trades.length) * 100).toFixed(1) + '%',
+    totalPnL: totalPnL.toFixed(2),
+    avgWin: avgWin.toFixed(2), avgLoss: avgLoss.toFixed(2),
+    profitFactor: profFactor ? profFactor.toFixed(2) : '—',
+    maxDrawdown: dd.toFixed(1) + '%',
+    byType
+  });
+});
+
+// Obsidian Sync manuell
+app.post('/api/trades/sync-obsidian', (req, res) => {
+  const ok = syncToObsidian(portfolio);
+  res.json({ ok, path: OBSIDIAN_TRADES });
+});
+
+// Equity zurücksetzen / Portfolio resetten
+app.post('/api/portfolio/reset', (req, res) => {
+  const { equity = 10000 } = req.body;
+  portfolio = JSON.parse(JSON.stringify(DEFAULT_PORTFOLIO));
+  portfolio.equity = equity;
+  savePortfolio(portfolio);
+  res.json({ ok: true, equity });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// EXTERNE BOTS — Google Drive & Webhook-Empfang
+// ════════════════════════════════════════════════════════════════════
+
+// Externes Signal empfangen (andere Bots posten hierher)
+app.post('/api/external-signal', async (req, res) => {
+  const { botName, ticker, signal, sl, tp, confidence, reason, strategy, leverage, type } = req.body;
+  if (!botName || !signal) return res.status(400).json({ error: 'botName + signal required' });
+
+  const entry = {
+    botName, ticker: ticker || 'GC=F', signal, sl, tp, confidence,
+    reason, strategy, leverage, type: type || 'cfd',
+    receivedAt: new Date().toISOString()
+  };
+
+  // Speichern
+  if (!portfolio.externalBots[botName]) portfolio.externalBots[botName] = { history: [] };
+  portfolio.externalBots[botName].lastSignal   = signal;
+  portfolio.externalBots[botName].lastTicker   = ticker;
+  portfolio.externalBots[botName].lastSeen     = new Date().toISOString();
+  portfolio.externalBots[botName].history.unshift(entry);
+  if (portfolio.externalBots[botName].history.length > 50) portfolio.externalBots[botName].history.pop();
+
+  // Auto-Trade wenn Signal strong ist
+  let autoTrade = null;
+  if (confidence >= 70 && (signal === 'BUY' || signal === 'SELL')) {
+    try {
+      const priceData = await fetchPrice(ticker || 'GC=F', '1y');
+      const ind       = calcAllIndicators(priceData.history);
+      const lev       = leverage || portfolio.settings.defaultLeverage;
+      const budget    = portfolio.equity * portfolio.settings.maxRiskPerTrade;
+      const lp        = calcLeverageParams(ticker || 'GC=F', signal, ind.curr, lev, type || 'cfd', budget, ind.atr);
+
+      if (portfolio.openPositions.length < portfolio.settings.maxOpenTrades) {
+        const pos = {
+          id: `pos_ext_${Date.now()}`, ticker: ticker || 'GC=F', name: getMeta(ticker||'GC=F').name,
+          direction: signal, type: type || 'cfd', leverage: lev,
+          entryPrice: ind.curr, currentPrice: ind.curr,
+          units: lp.units, margin: budget, notional: lp.notional,
+          sl: sl || lp.sl, tp: tp || lp.tp, barrier: lp.barrier || null,
+          confluenceScore: confidence / 10, regime: detectRegime(ind),
+          openTime: new Date().toISOString(), status: 'open',
+          unrealizedPnL: 0, realizedPnL: null,
+          strategie: strategy || botName, source: botName, leverageParams: lp,
+        };
+        portfolio.openPositions.push(pos);
+        autoTrade = pos;
+      }
+    } catch (e) { console.error('Auto-Trade ext signal:', e.message); }
+  }
+
+  savePortfolio(portfolio);
+  res.json({ ok: true, entry, autoTrade });
+});
+
+// Fleet Status (alle Bots)
+app.get('/api/fleet', (req, res) => {
+  res.json({
+    externalBots: portfolio.externalBots,
+    openPositions: portfolio.openPositions.length,
+    botCount: Object.keys(portfolio.externalBots).length,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Google Drive Bot-Sync (polling von einem Google Sheet / CSV URL)
+app.post('/api/fleet/gdrive-sync', async (req, res) => {
+  const { sheetUrl, botName = 'gdrive-bot' } = req.body;
+  if (!sheetUrl) return res.status(400).json({ error: 'sheetUrl required' });
+
+  try {
+    // Google Sheets CSV Export URL: spreadsheets/d/ID/export?format=csv
+    const csvUrl = sheetUrl.includes('export') ? sheetUrl
+      : sheetUrl.replace('/edit', '/export?format=csv');
+    const r    = await axios.get(csvUrl, { timeout: 10000 });
+    const rows = r.data.split('\n').slice(1).filter(Boolean);
+    const signals = [];
+
+    for (const row of rows.slice(-10)) { // Letzte 10 Zeilen
+      const cols = row.split(',');
+      if (cols.length >= 4) {
+        signals.push({ ticker: cols[0]?.trim(), signal: cols[1]?.trim(), confidence: parseFloat(cols[2]), reason: cols[3]?.trim(), ts: cols[4]?.trim() });
+      }
+    }
+
+    // Neuestes Signal verarbeiten
+    const latest = signals[signals.length - 1];
+    if (latest?.signal) {
+      if (!portfolio.externalBots[botName]) portfolio.externalBots[botName] = { history: [] };
+      portfolio.externalBots[botName].lastSignal  = latest.signal;
+      portfolio.externalBots[botName].lastTicker  = latest.ticker;
+      portfolio.externalBots[botName].lastSeen    = new Date().toISOString();
+      portfolio.externalBots[botName].history.unshift({ ...latest, botName, receivedAt: new Date().toISOString() });
+      savePortfolio(portfolio);
+    }
+
+    res.json({ ok: true, signals, latest, botName });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════
+// NEURAL STATUS — Live-Zustand des Bot-Gehirns für Visualisierung
+// ════════════════════════════════════════════════════════════════════
+app.get('/api/neural-status', async (req, res) => {
+  const ticker = req.query.ticker || 'GC=F';
+  try {
+    const priceData = await fetchPrice(ticker, '1y');
+    const ind       = calcAllIndicators(priceData.history);
+    const regime    = detectRegime(ind);
+    const conf      = calcConfluence(ind, regime);
+    const session   = getSessionInfo(ticker);
+
+    const nodes = {
+      marketData:  { id: 'marketData',  label: 'Market Data',       status: 'active',   value: `$${ind.curr?.toFixed(2)}`,      color: '#44cc88' },
+      indicators:  { id: 'indicators',  label: 'Indicator Engine',   status: 'active',   value: `RSI:${ind.rsi?.toFixed(0)} ADX:${ind.adx?.adx?.toFixed(0)}`, color: '#60a5fa' },
+      regime:      { id: 'regime',      label: 'Regime Detector',    status: 'active',   value: regime.toUpperCase(),             color: '#a78bfa' },
+      confluence:  { id: 'confluence',  label: 'Confluence Engine',  status: conf.tradeable ? 'active' : 'idle', value: `${conf.score}/${conf.maxScore} ${conf.direction}`, color: conf.direction==='BUY'?'#44cc88':conf.direction==='SELL'?'#ff4444':'#ffcc00' },
+      session:     { id: 'session',     label: 'Session Filter',     status: session.tradeable ? 'active' : 'blocked', value: session.label, color: session.tradeable ? '#44cc88' : '#ff8844' },
+      claudeAI:    { id: 'claudeAI',    label: 'Claude AI',          status: 'standby',  value: 'claude-sonnet-4-6',              color: '#f0c040' },
+      riskMgr:     { id: 'riskMgr',     label: 'Risk Manager',       status: 'active',   value: `ATR:$${ind.atr?.toFixed(2)}`,    color: '#fb923c' },
+      positions:   { id: 'positions',   label: 'Position Manager',   status: portfolio.openPositions.length ? 'active' : 'idle', value: `${portfolio.openPositions.length} offen`, color: '#34d399' },
+      botWebhook:  { id: 'botWebhook',  label: 'Bot Webhook',        status: 'standby',  value: 'Railway',                       color: '#60a5fa' },
+      obsidian:    { id: 'obsidian',    label: 'Obsidian Vault',     status: 'idle',     value: 'cloud/obsidian',                 color: '#a78bfa' },
+      extBots:     { id: 'extBots',     label: 'External Bots',      status: Object.keys(portfolio.externalBots).length ? 'active' : 'idle', value: `${Object.keys(portfolio.externalBots).length} Bots`, color: '#f472b6' },
+    };
+
+    const edges = [
+      { from: 'marketData',  to: 'indicators',  active: true,  dir: conf.direction },
+      { from: 'indicators',  to: 'regime',       active: true,  dir: conf.direction },
+      { from: 'indicators',  to: 'confluence',   active: true,  dir: conf.direction },
+      { from: 'regime',      to: 'confluence',   active: true,  dir: conf.direction },
+      { from: 'confluence',  to: 'session',      active: conf.tradeable, dir: conf.direction },
+      { from: 'session',     to: 'claudeAI',     active: session.tradeable && conf.tradeable, dir: conf.direction },
+      { from: 'confluence',  to: 'claudeAI',     active: conf.tradeable, dir: conf.direction },
+      { from: 'claudeAI',    to: 'riskMgr',      active: session.tradeable && conf.tradeable, dir: conf.direction },
+      { from: 'riskMgr',     to: 'positions',    active: true, dir: conf.direction },
+      { from: 'riskMgr',     to: 'botWebhook',   active: session.tradeable && conf.tradeable, dir: conf.direction },
+      { from: 'positions',   to: 'obsidian',     active: portfolio.openPositions.length > 0, dir: 'neutral' },
+      { from: 'extBots',     to: 'confluence',   active: Object.keys(portfolio.externalBots).length > 0, dir: 'neutral' },
+      { from: 'extBots',     to: 'positions',    active: Object.keys(portfolio.externalBots).length > 0, dir: 'neutral' },
+    ];
+
+    res.json({ nodes, edges, ticker, regime, confluence: conf, session, portfolio: { equity: portfolio.equity, openPositions: portfolio.openPositions.length }, timestamp: new Date().toISOString() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.listen(PORT, () => console.log(`🌍 Globe läuft auf http://localhost:${PORT}`));

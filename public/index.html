@@ -10,25 +10,19 @@
 </head>
 <body>
 
-<!-- Loading -->
 <div id="loading">
   <div class="load-orb"></div>
   <div class="load-text">
     <span class="load-title">GOLD GLOBE</span>
-    <span class="load-sub">Lade KI-Analysen & Weltdaten</span>
+    <span class="load-sub">AI Trading Intelligence</span>
   </div>
 </div>
 
-<!-- Globe -->
 <div id="globe-container">
   <div id="globe-wrap"></div>
-
-  <!-- Regime Badge on Globe -->
   <div id="regime-badge"></div>
-
-  <!-- Legend -->
   <div id="legend">
-    <div class="legend-title" id="legend-title">Einfluss auf Asset</div>
+    <div class="legend-title" id="legend-title">Asset-Einfluss</div>
     <div class="legend-item"><div class="legend-color" style="background:#00aa44"></div><span>Sehr bullish</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#88cc00"></div><span>Bullish</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ffcc00"></div><span>Neutral</span></div>
@@ -37,13 +31,10 @@
   </div>
 </div>
 
-<!-- Resize Handle -->
 <div id="resize-handle"></div>
 
-<!-- Sidebar -->
 <div id="sidebar">
 
-  <!-- Header -->
   <div id="header">
     <div class="header-mark">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -59,7 +50,6 @@
     <div class="header-sub">AI Market Intelligence</div>
   </div>
 
-  <!-- Ticker Switcher -->
   <div id="ticker-bar">
     <button class="ticker-btn active" data-ticker="GC=F">GOLD</button>
     <button class="ticker-btn" data-ticker="SI=F">SILVER</button>
@@ -69,7 +59,6 @@
     <button class="ticker-btn" data-ticker="NVDA">NVDA</button>
   </div>
 
-  <!-- Price Panel -->
   <div id="price-panel">
     <div class="price-label" id="price-label">XAU / USD</div>
     <div id="price-display">
@@ -78,7 +67,6 @@
     </div>
   </div>
 
-  <!-- Confluence Meter -->
   <div id="confluence-bar">
     <div id="confluence-label">Confluence — Lade...</div>
     <div id="confluence-track">
@@ -88,22 +76,60 @@
     <div id="confluence-meta"></div>
   </div>
 
-  <!-- Tabs -->
   <div id="tabs">
-    <div class="tab active" data-tab="analytics">Analytics</div>
+    <div class="tab active" data-tab="analytics">Analyse</div>
+    <div class="tab" data-tab="positions">Trades</div>
     <div class="tab" data-tab="signal">Signal</div>
+    <div class="tab" data-tab="neural">Neural</div>
     <div class="tab" data-tab="events">Events</div>
     <div class="tab" data-tab="dashboard">Bot</div>
   </div>
 
-  <!-- Analytics Tab -->
+  <!-- ANALYTICS TAB -->
   <div class="tab-content active" id="tab-analytics">
-    <div id="analytics-content">
-      <div class="loading-msg">Lade Indikatoren...</div>
+    <div id="analytics-content"><div class="loading-msg">Lade Indikatoren...</div></div>
+  </div>
+
+  <!-- POSITIONS TAB -->
+  <div class="tab-content" id="tab-positions">
+    <div id="positions-content">
+
+      <!-- Portfolio Header -->
+      <div id="portfolio-header" style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.2)">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+          <div style="flex:1">
+            <div style="font-size:9px;color:#6090b0;letter-spacing:1.5px;text-transform:uppercase">Portfolio Equity</div>
+            <div id="portfolio-equity" style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:#f0c040">$10,000.00</div>
+          </div>
+          <div style="text-align:right">
+            <div id="portfolio-stats" style="font-size:10px;color:#6090b0"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="openPositionModal()" class="btn-primary" style="flex:1;font-size:11px">+ Trade öffnen</button>
+          <button onclick="loadPositions()" class="btn-ghost">↻</button>
+          <button onclick="closeAllPositions()" class="btn-ghost" style="color:#ff8844;border-color:#ff4444;font-size:10px">Alle schließen</button>
+        </div>
+      </div>
+
+      <!-- Open Positions -->
+      <div style="padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:9px;color:#6090b0;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">Offene Positionen</div>
+        <div id="open-positions-list"><div style="color:#4a6080;font-size:11px;padding:6px 0">Keine offenen Positionen</div></div>
+      </div>
+
+      <!-- Trade History -->
+      <div style="padding:8px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:9px;color:#6090b0;letter-spacing:2px;text-transform:uppercase">Trade-Historie</div>
+          <button onclick="syncObsidian()" style="font-size:9px;color:#a78bfa;background:none;border:none;cursor:pointer">📁 Obsidian sync</button>
+        </div>
+        <div id="trade-history-list"><div style="color:#4a6080;font-size:11px;padding:6px 0">Keine Trades</div></div>
+      </div>
     </div>
   </div>
 
-  <!-- Signal Tab -->
+  <!-- SIGNAL TAB -->
   <div class="tab-content" id="tab-signal">
     <div style="padding:10px 0">
       <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center">
@@ -117,35 +143,59 @@
       </div>
       <div id="signal-output" style="font-size:12px;min-height:60px"></div>
 
+      <!-- External Bots -->
       <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px">
-        <div style="font-size:10px;color:#4a6080;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Auto-Signal</div>
-        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-          <input id="auto-interval" type="number" value="60" min="5" max="1440"
-            style="width:60px;background:#0a1628;border:1px solid #1e3a5a;color:#c0d0e8;padding:5px;border-radius:6px;font-size:11px">
-          <span style="font-size:11px;color:#4a6080">Min</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:9px;color:#6090b0;letter-spacing:2px;text-transform:uppercase">Externe Bots (Fleet)</div>
+          <button onclick="loadFleet()" style="font-size:9px;color:#f472b6;background:none;border:none;cursor:pointer">↻</button>
+        </div>
+        <div id="fleet-status" style="font-size:11px;color:#4a6080">Lädt...</div>
+        <div style="margin-top:8px;display:flex;gap:6px">
+          <input id="gdrive-url" placeholder="Google Sheet CSV-URL..." style="flex:1;background:#0a1628;border:1px solid #1e3a5a;color:#c0d0e8;padding:5px 8px;border-radius:6px;font-size:10px">
+          <button onclick="syncGDrive()" class="btn-ghost" style="font-size:10px">Sync</button>
+        </div>
+      </div>
+
+      <!-- Auto-Signal -->
+      <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px">
+        <div style="font-size:9px;color:#6090b0;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Auto-Signal</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+          <input id="auto-interval" type="number" value="60" min="5"
+            style="width:55px;background:#0a1628;border:1px solid #1e3a5a;color:#c0d0e8;padding:5px;border-radius:6px;font-size:11px">
+          <span style="font-size:10px;color:#4a6080">Min</span>
           <button id="auto-btn" onclick="toggleAuto()" class="btn-ghost" style="flex:1">▶ Start</button>
         </div>
         <div id="auto-status" style="font-size:10px;color:#44cc88"></div>
       </div>
 
-      <div id="signal-log" style="font-size:10px;color:#4a6080;margin-top:8px;max-height:100px;overflow-y:auto"></div>
+      <div id="signal-log" style="font-size:10px;color:#4a6080;margin-top:8px;max-height:80px;overflow-y:auto"></div>
     </div>
   </div>
 
-  <!-- Events Tab -->
+  <!-- NEURAL TAB -->
+  <div class="tab-content" id="tab-neural">
+    <div id="neural-portfolio" style="padding:6px 14px;font-size:10px;color:#4a6080;font-family:'JetBrains Mono',monospace;border-bottom:1px solid rgba(255,255,255,0.06)">Lade...</div>
+    <div style="position:relative;flex:1;min-height:320px">
+      <canvas id="neural-canvas" style="width:100%;height:320px;display:block"></canvas>
+    </div>
+    <div style="padding:8px 14px">
+      <div style="font-size:9px;color:#4a6080;letter-spacing:1px">
+        🟢 Aktiv &nbsp; 🟡 Standby &nbsp; 🔴 Geblockt &nbsp; ⚫ Idle<br>
+        Partikel = Datenfluss | Farbe = Signal-Richtung
+      </div>
+    </div>
+  </div>
+
+  <!-- EVENTS TAB -->
   <div class="tab-content" id="tab-events">
-    <div id="events-list">
-      <div class="loading-msg">Lade Events...</div>
-    </div>
+    <div id="events-list"><div class="loading-msg">Lade Events...</div></div>
   </div>
 
-  <!-- Bot Tab -->
+  <!-- BOT TAB -->
   <div class="tab-content" id="tab-dashboard">
-    <iframe
-      src="https://trading-bot-production-86d8.up.railway.app/dashboard"
+    <iframe src="https://trading-bot-production-86d8.up.railway.app/dashboard"
       style="width:100%;height:100%;border:none;background:#060810"
-      title="Trading Bot Dashboard">
-    </iframe>
+      title="Trading Bot Dashboard"></iframe>
   </div>
 
 </div>
@@ -156,12 +206,57 @@
     <div id="popup-title">Land</div>
     <button id="popup-close" onclick="closePopup()">✕</button>
   </div>
-  <div id="popup-body">
-    <div class="popup-loading">Analysiere...</div>
+  <div id="popup-body"><div class="popup-loading">Analysiere...</div></div>
+</div>
+
+<!-- Trade öffnen Modal -->
+<div id="trade-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;align-items:center;justify-content:center">
+  <div style="background:#0c1020;border:1px solid #1e3a5a;border-radius:12px;padding:20px;width:320px;max-width:95vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:700;color:#f0c040">Trade öffnen</div>
+      <button onclick="closeTradeModal()" style="background:none;border:none;color:#6090b0;font-size:18px;cursor:pointer">✕</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <div class="field-label">Ticker</div>
+        <select id="trade-ticker" style="width:100%;background:#06080f;border:1px solid #1e3a5a;color:#c0d0e8;padding:7px;border-radius:7px;font-size:12px"></select>
+      </div>
+      <div>
+        <div class="field-label">Richtung</div>
+        <select id="trade-direction" style="width:100%;background:#06080f;border:1px solid #1e3a5a;color:#c0d0e8;padding:7px;border-radius:7px;font-size:12px">
+          <option value="BUY">🔼 BUY (Long)</option>
+          <option value="SELL">🔽 SELL (Short)</option>
+        </select>
+      </div>
+      <div>
+        <div class="field-label">Typ</div>
+        <select id="trade-type" style="width:100%;background:#06080f;border:1px solid #1e3a5a;color:#c0d0e8;padding:7px;border-radius:7px;font-size:12px">
+          <option value="cfd">CFD</option>
+          <option value="knockout">Knockout/Turbo</option>
+          <option value="spot">Spot</option>
+        </select>
+      </div>
+      <div>
+        <div class="field-label">Hebel (CFD)</div>
+        <input id="trade-leverage" type="number" value="10" min="1" max="100"
+          style="width:100%;background:#06080f;border:1px solid #1e3a5a;color:#c0d0e8;padding:7px;border-radius:7px;font-size:12px">
+      </div>
+      <div style="grid-column:1/-1">
+        <div class="field-label">Kapitaleinsatz ($)</div>
+        <input id="trade-invest" type="number" value="200" min="1"
+          style="width:100%;background:#06080f;border:1px solid #1e3a5a;color:#c0d0e8;padding:7px;border-radius:7px;font-size:12px">
+      </div>
+    </div>
+
+    <div id="trade-preview" style="margin:12px 0;font-size:11px;color:#6090b0;min-height:40px"></div>
+
+    <button onclick="submitTrade()" class="btn-primary" style="width:100%;padding:10px;font-size:13px">Trade öffnen</button>
   </div>
 </div>
 
 <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
+<script src="neural.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
