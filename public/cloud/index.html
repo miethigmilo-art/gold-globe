@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cloud Browser</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☁️</text></svg>" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-elev: #161b22;
+      --bg-hover: #21262d;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-dim: #8b949e;
+      --accent: #f5c518;
+      --accent-dim: #b48f1a;
+      --danger: #f85149;
+      --ok: #3fb950;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      overflow: hidden;
+    }
+    .app { display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
+    @media (max-width: 700px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .app.show-sidebar .sidebar { display: flex; position: fixed; inset: 0; z-index: 10; }
+      .app.show-sidebar .main { display: none; }
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-elev);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      min-width: 0;
+    }
+    .sidebar-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .logo { font-size: 18px; font-weight: 600; color: var(--accent); }
+    .sidebar-actions {
+      padding: 8px;
+      display: flex; gap: 6px; flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+    }
+    .btn {
+      background: var(--bg-hover); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 10px; font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: var(--border); }
+    .btn-primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+    .btn-primary:hover { background: var(--accent-dim); }
+    .btn-danger { color: var(--danger); }
+    .file-list {
+      flex: 1; overflow-y: auto; padding: 4px;
+    }
+    .file-item {
+      padding: 8px 12px; cursor: pointer; border-radius: 4px;
+      font-size: 14px; display: flex; align-items: center; gap: 8px;
+      user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .file-item:hover { background: var(--bg-hover); }
+    .file-item.active { background: var(--bg-hover); color: var(--accent); }
+    .file-item.dir { color: var(--accent); font-weight: 500; }
+    .file-item .icon { width: 16px; flex-shrink: 0; text-align: center; }
+    .breadcrumb {
+      padding: 8px 12px; font-size: 12px; color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap; overflow-x: auto;
+    }
+    .breadcrumb a { color: var(--accent); text-decoration: none; cursor: pointer; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    /* Main */
+    .main {
+      display: flex; flex-direction: column; min-width: 0;
+    }
+    .toolbar {
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px; min-height: 48px;
+      background: var(--bg-elev);
+    }
+    .toolbar .title { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .toolbar .mobile-menu { display: none; }
+    @media (max-width: 700px) { .toolbar .mobile-menu { display: block; } }
+    .content {
+      flex: 1; overflow-y: auto; padding: 24px;
+    }
+    .content.editor-mode { padding: 0; display: flex; flex-direction: column; }
+    .content textarea {
+      flex: 1; width: 100%; padding: 16px;
+      background: var(--bg); color: var(--text);
+      border: none; outline: none; resize: none;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 14px; line-height: 1.6;
+    }
+
+    /* Markdown rendering */
+    .markdown { line-height: 1.7; max-width: 800px; margin: 0 auto; }
+    .markdown h1, .markdown h2, .markdown h3 { color: var(--text); margin-top: 1.5em; }
+    .markdown h1 { border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+    .markdown a { color: var(--accent); }
+    .markdown code { background: var(--bg-elev); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    .markdown pre { background: var(--bg-elev); padding: 12px; border-radius: 6px; overflow-x: auto; }
+    .markdown pre code { background: none; padding: 0; }
+    .markdown blockquote {
+      border-left: 3px solid var(--accent); padding-left: 12px; color: var(--text-dim);
+    }
+    .markdown table { border-collapse: collapse; width: 100%; }
+    .markdown th, .markdown td { border: 1px solid var(--border); padding: 6px 10px; }
+    .markdown th { background: var(--bg-elev); }
+    .markdown img { max-width: 100%; }
+
+    /* Modal */
+    .modal-bg {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-bg.show { display: flex; }
+    .modal {
+      background: var(--bg-elev); border: 1px solid var(--border);
+      border-radius: 8px; padding: 20px; min-width: 320px; max-width: 500px;
+    }
+    .modal h2 { margin-top: 0; }
+    .modal input, .modal textarea {
+      width: 100%; padding: 8px; margin: 8px 0;
+      background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 4px;
+      font-family: inherit; font-size: 14px;
+    }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+    .empty {
+      text-align: center; color: var(--text-dim); padding: 60px 20px;
+    }
+    .empty h2 { color: var(--text); }
+    .empty .hint { font-size: 13px; margin-top: 12px; }
+
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--bg-elev); border: 1px solid var(--border);
+      padding: 10px 16px; border-radius: 6px; z-index: 200;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .toast.error { border-color: var(--danger); color: var(--danger); }
+    .toast.ok { border-color: var(--ok); color: var(--ok); }
+
+    .loading { color: var(--text-dim); padding: 20px; text-align: center; }
+  </style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="logo">☁️ Cloud</span>
+    </div>
+    <div class="sidebar-actions">
+      <button class="btn btn-primary" id="newNoteBtn">+ Notiz</button>
+      <button class="btn" id="refreshBtn" title="Neu laden">↻</button>
+      <button class="btn" id="tokenBtn" title="GitHub Token">🔑</button>
+    </div>
+    <div class="breadcrumb" id="breadcrumb"></div>
+    <div class="file-list" id="fileList">
+      <div class="loading">Lade…</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="toolbar">
+      <button class="btn mobile-menu" id="menuBtn">☰</button>
+      <div class="title" id="docTitle">Willkommen</div>
+      <button class="btn" id="editBtn" style="display:none">✏️ Bearbeiten</button>
+      <button class="btn btn-primary" id="saveBtn" style="display:none">💾 Speichern</button>
+      <button class="btn" id="cancelEditBtn" style="display:none">Abbrechen</button>
+      <button class="btn btn-danger" id="deleteBtn" style="display:none">🗑</button>
+    </div>
+    <div class="content" id="content">
+      <div class="empty">
+        <h2>☁️ Deine Cloud</h2>
+        <p>Wähle links eine Datei oder erstelle eine neue Notiz.</p>
+        <p class="hint">Repo: <code>miethigmilo-art/gold-globe</code> · Ordner: <code>cloud/</code></p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Token Modal -->
+<div class="modal-bg" id="tokenModal">
+  <div class="modal">
+    <h2>🔑 GitHub Token</h2>
+    <p style="color: var(--text-dim); font-size: 13px;">
+      Zum Speichern/Erstellen/Löschen brauchst du einen GitHub Personal Access Token mit <code>repo</code>-Berechtigung.<br>
+      → <a href="https://github.com/settings/tokens/new?scopes=repo&description=Cloud%20Browser" target="_blank" style="color: var(--accent)">Token erstellen</a>
+    </p>
+    <input type="password" id="tokenInput" placeholder="ghp_… oder github_pat_…" autocomplete="off" />
+    <p style="font-size: 12px; color: var(--text-dim);">Wird nur lokal in deinem Browser (localStorage) gespeichert.</p>
+    <div class="modal-actions">
+      <button class="btn" id="tokenClearBtn">Löschen</button>
+      <button class="btn" id="tokenCancelBtn">Abbrechen</button>
+      <button class="btn btn-primary" id="tokenSaveBtn">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- New File Modal -->
+<div class="modal-bg" id="newFileModal">
+  <div class="modal">
+    <h2>+ Neue Notiz</h2>
+    <input type="text" id="newFileName" placeholder="meine-notiz.md" />
+    <div class="modal-actions">
+      <button class="btn" id="newFileCancelBtn">Abbrechen</button>
+      <button class="btn btn-primary" id="newFileCreateBtn">Erstellen</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const REPO_OWNER = "miethigmilo-art";
+const REPO_NAME = "gold-globe";
+const BRANCH = "main";
+const ROOT = "cloud";
+
+const state = {
+  path: ROOT,
+  currentFile: null,
+  currentSha: null,
+  currentContent: "",
+  editing: false,
+};
+
+const $ = (id) => document.getElementById(id);
+const api = (endpoint, options = {}) => {
+  const token = localStorage.getItem("gh_token");
+  const headers = { "Accept": "application/vnd.github+json", ...(options.headers || {}) };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  return fetch(`https://api.github.com${endpoint}`, { ...options, headers });
+};
+
+function toast(msg, type = "") {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+async function loadDir(path) {
+  state.path = path;
+  $("fileList").innerHTML = '<div class="loading">Lade…</div>';
+  renderBreadcrumb();
+  try {
+    const res = await api(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const items = await res.json();
+    renderFileList(Array.isArray(items) ? items : [items]);
+  } catch (e) {
+    $("fileList").innerHTML = `<div class="loading">Fehler: ${e.message}</div>`;
+  }
+}
+
+function renderBreadcrumb() {
+  const parts = state.path.split("/").filter(Boolean);
+  const html = parts.map((p, i) => {
+    const sub = parts.slice(0, i + 1).join("/");
+    return `<a data-path="${sub}">${p}</a>`;
+  }).join(" / ");
+  $("breadcrumb").innerHTML = html;
+  $("breadcrumb").querySelectorAll("a").forEach(a => {
+    a.onclick = () => loadDir(a.dataset.path);
+  });
+}
+
+function renderFileList(items) {
+  items.sort((a, b) => {
+    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  const html = [];
+  if (state.path !== ROOT) {
+    const parent = state.path.split("/").slice(0, -1).join("/") || ROOT;
+    html.push(`<div class="file-item dir" data-path="${parent}" data-type="dir"><span class="icon">↩</span><span>..</span></div>`);
+  }
+  for (const item of items) {
+    const icon = item.type === "dir" ? "📁" : (item.name.endsWith(".md") ? "📝" : "📄");
+    html.push(`<div class="file-item ${item.type}" data-path="${item.path}" data-type="${item.type}" data-sha="${item.sha}"><span class="icon">${icon}</span><span>${item.name}</span></div>`);
+  }
+  $("fileList").innerHTML = html.join("") || '<div class="loading">Leer</div>';
+  $("fileList").querySelectorAll(".file-item").forEach(el => {
+    el.onclick = () => {
+      if (el.dataset.type === "dir") {
+        loadDir(el.dataset.path);
+      } else {
+        loadFile(el.dataset.path);
+        document.querySelectorAll(".file-item.active").forEach(e => e.classList.remove("active"));
+        el.classList.add("active");
+        if (window.innerWidth <= 700) $("app").classList.remove("show-sidebar");
+      }
+    };
+  });
+}
+
+async function loadFile(path) {
+  state.currentFile = path;
+  state.editing = false;
+  $("docTitle").textContent = path.split("/").pop();
+  $("content").innerHTML = '<div class="loading">Lade…</div>';
+  $("content").classList.remove("editor-mode");
+  try {
+    const res = await api(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    state.currentSha = data.sha;
+    state.currentContent = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+    renderView();
+  } catch (e) {
+    $("content").innerHTML = `<div class="empty"><h2>Fehler</h2><p>${e.message}</p></div>`;
+  }
+}
+
+function renderView() {
+  $("editBtn").style.display = "";
+  $("deleteBtn").style.display = "";
+  $("saveBtn").style.display = "none";
+  $("cancelEditBtn").style.display = "none";
+  $("content").classList.remove("editor-mode");
+  const isMd = state.currentFile.endsWith(".md");
+  if (isMd) {
+    $("content").innerHTML = `<div class="markdown">${marked.parse(state.currentContent)}</div>`;
+  } else {
+    $("content").innerHTML = `<pre style="white-space: pre-wrap; font-family: ui-monospace, monospace;">${escapeHtml(state.currentContent)}</pre>`;
+  }
+}
+
+function renderEditor() {
+  state.editing = true;
+  $("editBtn").style.display = "none";
+  $("deleteBtn").style.display = "none";
+  $("saveBtn").style.display = "";
+  $("cancelEditBtn").style.display = "";
+  $("content").classList.add("editor-mode");
+  $("content").innerHTML = `<textarea id="editor"></textarea>`;
+  $("editor").value = state.currentContent;
+  $("editor").focus();
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+async function saveFile() {
+  const token = localStorage.getItem("gh_token");
+  if (!token) { showTokenModal(); return; }
+  const content = $("editor").value;
+  const b64 = btoa(unescape(encodeURIComponent(content)));
+  try {
+    const res = await api(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/${state.currentFile}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        message: `cloud: update ${state.currentFile.split("/").pop()}`,
+        content: b64,
+        sha: state.currentSha,
+        branch: BRANCH,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    state.currentSha = data.content.sha;
+    state.currentContent = content;
+    renderView();
+    toast("Gespeichert ✓", "ok");
+  } catch (e) {
+    toast("Fehler: " + e.message, "error");
+  }
+}
+
+async function createFile(name) {
+  const token = localStorage.getItem("gh_token");
+  if (!token) { showTokenModal(); return; }
+  const path = `${state.path}/${name}`;
+  const initialContent = name.endsWith(".md") ? `# ${name.replace(/\.md$/, "")}\n\n` : "";
+  const b64 = btoa(unescape(encodeURIComponent(initialContent)));
+  try {
+    const res = await api(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        message: `cloud: create ${name}`,
+        content: b64,
+        branch: BRANCH,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    await loadDir(state.path);
+    await loadFile(path);
+    renderEditor();
+    toast("Erstellt ✓", "ok");
+  } catch (e) {
+    toast("Fehler: " + e.message, "error");
+  }
+}
+
+async function deleteFile() {
+  if (!confirm(`Datei "${state.currentFile}" wirklich löschen?`)) return;
+  const token = localStorage.getItem("gh_token");
+  if (!token) { showTokenModal(); return; }
+  try {
+    const res = await api(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/${state.currentFile}`, {
+      method: "DELETE",
+      body: JSON.stringify({
+        message: `cloud: delete ${state.currentFile.split("/").pop()}`,
+        sha: state.currentSha,
+        branch: BRANCH,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    state.currentFile = null;
+    state.currentSha = null;
+    state.currentContent = "";
+    $("docTitle").textContent = "Willkommen";
+    $("editBtn").style.display = "none";
+    $("deleteBtn").style.display = "none";
+    $("content").innerHTML = `<div class="empty"><h2>Gelöscht</h2></div>`;
+    await loadDir(state.path);
+    toast("Gelöscht ✓", "ok");
+  } catch (e) {
+    toast("Fehler: " + e.message, "error");
+  }
+}
+
+function showTokenModal() {
+  $("tokenInput").value = localStorage.getItem("gh_token") || "";
+  $("tokenModal").classList.add("show");
+}
+
+function hideTokenModal() { $("tokenModal").classList.remove("show"); }
+
+// Event bindings
+$("newNoteBtn").onclick = () => {
+  $("newFileName").value = "";
+  $("newFileModal").classList.add("show");
+  setTimeout(() => $("newFileName").focus(), 50);
+};
+$("refreshBtn").onclick = () => loadDir(state.path);
+$("tokenBtn").onclick = showTokenModal;
+$("tokenCancelBtn").onclick = hideTokenModal;
+$("tokenSaveBtn").onclick = () => {
+  const v = $("tokenInput").value.trim();
+  if (v) localStorage.setItem("gh_token", v);
+  hideTokenModal();
+  toast("Token gespeichert", "ok");
+};
+$("tokenClearBtn").onclick = () => {
+  localStorage.removeItem("gh_token");
+  $("tokenInput").value = "";
+  toast("Token entfernt");
+};
+$("newFileCancelBtn").onclick = () => $("newFileModal").classList.remove("show");
+$("newFileCreateBtn").onclick = () => {
+  const name = $("newFileName").value.trim();
+  if (!name) return;
+  $("newFileModal").classList.remove("show");
+  createFile(name);
+};
+$("newFileName").onkeydown = (e) => { if (e.key === "Enter") $("newFileCreateBtn").click(); };
+$("editBtn").onclick = renderEditor;
+$("cancelEditBtn").onclick = () => renderView();
+$("saveBtn").onclick = saveFile;
+$("deleteBtn").onclick = deleteFile;
+$("menuBtn").onclick = () => $("app").classList.toggle("show-sidebar");
+
+// Click outside modal closes it
+document.querySelectorAll(".modal-bg").forEach(m => {
+  m.onclick = (e) => { if (e.target === m) m.classList.remove("show"); };
+});
+
+// Initial load
+loadDir(ROOT);
+</script>
+
+</body>
+</html>
