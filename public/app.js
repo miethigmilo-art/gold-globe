@@ -5,6 +5,35 @@ let globe = null;
 let countryData = {};
 let eventsData = [];
 let backtestChart = null;
+let currentTicker = 'GC=F';
+
+const TICKER_LABELS = {
+  'GC=F': 'XAU / USD', 'SI=F': 'XAG / USD', 'CL=F': 'WTI / USD',
+  'SPY': 'S&P 500', 'QQQ': 'NASDAQ 100', 'NVDA': 'NVIDIA',
+  'AAPL': 'APPLE', 'BTC-USD': 'BTC / USD', 'ETH-USD': 'ETH / USD'
+};
+
+function switchTicker(ticker) {
+  currentTicker = ticker;
+  document.querySelectorAll('.ticker-btn').forEach(b => b.classList.toggle('active', b.dataset.ticker === ticker));
+  const label = TICKER_LABELS[ticker] || ticker;
+  const el = document.getElementById('price-label');
+  if (el) el.textContent = label;
+  document.getElementById('gold-price-value').textContent = '—';
+  document.getElementById('gold-price-change').textContent = '';
+  loadGoldPrice();
+  // Globus-Farben neu laden (aus Cache oder neu)
+  countryData = {};
+  fetch(`/api/countries?ticker=${encodeURIComponent(currentTicker)}`).then(r => r.json()).then(d => {
+    if (!d.error) {
+      countryData = d;
+      if (globe) globe.polygonCapColor(x => scoreToColor(countryData[x.properties.ISO_A3 || x.properties.ADM0_A3]?.score));
+    }
+  }).catch(() => {});
+  fetch(`/api/events?ticker=${encodeURIComponent(currentTicker)}`).then(r => r.json()).then(d => {
+    if (Array.isArray(d)) { renderEvents(d); if (globe) globe.pointsData(d); }
+  }).catch(() => {});
+}
 
 // ── Color helpers ────────────────────────────────────────────────────────────
 function scoreToColor(score) {
@@ -138,7 +167,7 @@ function flyToEvent(lat, lng) {
 // ── Gold Price ───────────────────────────────────────────────────────────────
 async function loadGoldPrice() {
   try {
-    const r = await fetch('/api/gold-price');
+    const r = await fetch(`/api/gold-price?ticker=${encodeURIComponent(currentTicker)}`);
     const data = await r.json();
     if (data.current) {
       const history = data.history;
@@ -165,7 +194,7 @@ async function showCountryPopup(name, iso) {
     const r = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ country: name })
+      body: JSON.stringify({ country: name, ticker: currentTicker })
     });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
@@ -218,7 +247,7 @@ async function getRecommendation() {
   output.innerHTML = '';
 
   try {
-    const es = new EventSource('/api/recommendation');
+    const es = new EventSource(`/api/recommendation?ticker=${encodeURIComponent(currentTicker)}`);
     let buffer = '';
 
     es.onmessage = (e) => {
@@ -467,7 +496,7 @@ async function sendSignal(dryRun = false) {
     const r = await fetch('/api/signal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ strategie, dryRun })
+      body: JSON.stringify({ strategie, dryRun, ticker: currentTicker })
     });
     const d = await r.json();
 
@@ -552,14 +581,19 @@ async function init() {
   // 1. Globus sofort starten (leere Daten)
   initGlobe({});
 
+  // Ticker-Buttons
+  document.querySelectorAll('.ticker-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTicker(btn.dataset.ticker));
+  });
+
   // 2. Restliche Daten parallel im Hintergrund laden
   loadGoldPrice();
   setInterval(loadGoldPrice, 300000);
 
   // Länder + Events parallel laden
   Promise.all([
-    fetch('/api/countries').then(r => r.json()).catch(() => ({})),
-    fetch('/api/events').then(r => r.json()).catch(() => [])
+    fetch(`/api/countries?ticker=${encodeURIComponent(currentTicker)}`).then(r => r.json()).catch(() => ({})),
+    fetch(`/api/events?ticker=${encodeURIComponent(currentTicker)}`).then(r => r.json()).catch(() => [])
   ]).then(([countries, events]) => {
     if (events && Array.isArray(events)) renderEvents(events);
     if (countries && !countries.error && Object.keys(countries).length > 0) {

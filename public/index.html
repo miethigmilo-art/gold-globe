@@ -56,9 +56,19 @@
     <div class="header-sub">AI Market Intelligence</div>
   </div>
 
+  <!-- Ticker Switcher -->
+  <div id="ticker-bar">
+    <button class="ticker-btn active" data-ticker="GC=F">GOLD</button>
+    <button class="ticker-btn" data-ticker="SI=F">SILVER</button>
+    <button class="ticker-btn" data-ticker="CL=F">OIL</button>
+    <button class="ticker-btn" data-ticker="SPY">S&P500</button>
+    <button class="ticker-btn" data-ticker="BTC-USD">BTC</button>
+    <button class="ticker-btn" data-ticker="NVDA">NVDA</button>
+  </div>
+
   <!-- Price Panel -->
   <div id="price-panel">
-    <div class="price-label">XAU / USD</div>
+    <div class="price-label" id="price-label">XAU / USD</div>
     <div id="price-display">
       <div id="gold-price-value">—</div>
       <div id="gold-price-change"></div>
@@ -68,6 +78,7 @@
   <!-- Tabs -->
   <div id="tabs">
     <div class="tab active" data-tab="events">Events</div>
+    <div class="tab" data-tab="signal">Signal</div>
     <div class="tab" data-tab="dashboard">Bot</div>
   </div>
 
@@ -75,6 +86,23 @@
   <div class="tab-content active" id="tab-events">
     <div id="events-list">
       <div class="loading-msg">Lade Events...</div>
+    </div>
+  </div>
+
+  <!-- Signal Tab -->
+  <div class="tab-content" id="tab-signal">
+    <div style="padding:12px 0">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <select id="signal-strategie" style="flex:1;background:#0a1628;border:1px solid #1e3a5a;color:#c0d0e8;padding:6px 8px;border-radius:6px;font-size:12px">
+          <option value="goldglobe">GoldGlobe KI</option>
+          <option value="mittel">Mittel</option>
+          <option value="aggressiv">Aggressiv</option>
+        </select>
+        <button onclick="sendSignal(true)" style="background:rgba(60,100,160,0.2);border:1px solid #1e3a5a;color:#8090a8;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer">Dry Run</button>
+        <button onclick="sendSignal(false)" style="background:rgba(68,204,136,0.15);border:1px solid #44cc88;color:#44cc88;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer">Signal</button>
+      </div>
+      <div id="signal-output" style="font-size:12px;min-height:60px"></div>
+      <div id="signal-log" style="font-size:10px;color:#4a6080;margin-top:8px;max-height:120px;overflow-y:auto"></div>
     </div>
   </div>
 

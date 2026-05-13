@@ -105,6 +105,31 @@ body {
   padding-left: 28px;
 }
 
+/* ── Ticker Bar ── */
+#ticker-bar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.ticker-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.ticker-btn:hover { border-color: var(--border2); color: var(--text); }
+.ticker-btn.active { background: rgba(212,168,67,.15); border-color: var(--gold); color: var(--gold); }
+
 /* ── Price Panel ── */
 #price-panel {
   padding: 14px 20px;
