@@ -71,9 +71,8 @@
       margin: 0; padding: 0; height: 100%;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg); color: var(--text);
-      overflow: hidden;
     }
-    .app { display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
+    .app { display: grid; grid-template-columns: 280px 1fr; height: 100vh; overflow: hidden; }
     @media (max-width: 700px) {
       .app { grid-template-columns: 1fr; }
       .sidebar { display: none; }
