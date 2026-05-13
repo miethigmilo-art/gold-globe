@@ -1,7 +1,6 @@
 # Anweisungen für Claude (alle Sessions)
 
-Dieses Repo dient als **geteilte Cloud** für Code + Obsidian-Notizen.
-Mehrere Personen / Claude-Sessions arbeiten parallel daran.
+Dieses Repo enthält den **Gold Globe** — ein AI-powered 3D Gold Trading Dashboard, deployed via Vercel.
 
 ## Pflicht-Workflow für jede Session
 
@@ -12,7 +11,7 @@ git pull origin main
 Hol den aktuellen Stand. Andere haben evtl. seit deiner letzten Session gepusht.
 
 ### 2) Nach jeder Code-Änderung
-Sobald eine logische Einheit fertig ist (Bugfix, Feature, Notiz), **immer**:
+Sobald eine logische Einheit fertig ist (Bugfix, Feature), **immer**:
 ```bash
 git add .
 git commit -m "<beschreibender Text>"
@@ -31,31 +30,25 @@ Frag den User **nicht** jedes Mal – einfach machen. Nur wenn:
 ## Repo-Struktur
 
 ```
-gold-globe/                  ← Repo-Root (auch deployed via Vercel)
+gold-globe/                  ← Repo-Root (deployed via Vercel)
 ├── server.js                ← Backend (Express, Trading-Bot-Proxy)
 ├── public/                  ← Frontend (Globe, Sidebar)
 │   ├── index.html
 │   ├── app.js
-│   ├── style.css
-│   └── cloud/               ← Browser-UI für die Cloud (siehe unten)
-└── cloud/                   ← GETEILTE CLOUD (Inhalt für alle Nutzer sichtbar)
-    ├── OBSIDIAN-CLOUD-SETUP.md   ← Anleitung für Obsidian-Sync
-    ├── projects/                  ← Code-Snapshots / Sub-Projekte
-    │   └── gold-globe/
-    └── obsidian/                  ← Obsidian-Vault-Notizen
+│   └── style.css
+├── package.json
+├── vercel.json
+└── Procfile
 ```
 
 ## Wichtige URLs
 
 - **Repo**: https://github.com/miethigmilo-art/gold-globe
-- **Cloud-Browser-UI**: `<vercel-deployment-url>/cloud/`
-- **Anleitung Obsidian-Sync**: `cloud/OBSIDIAN-CLOUD-SETUP.md`
+- **Live**: https://gold-globe.vercel.app
 
 ## Was Claude eigenständig tun darf
 
 - ✅ Code in `gold-globe/` (Repo-Root) ändern, committen, pushen
-- ✅ Notizen in `cloud/obsidian/` lesen/anlegen/ändern/löschen
-- ✅ Snapshots in `cloud/projects/<name>/` aktualisieren
 - ✅ Branches anlegen (`claude/<feature-name>`)
 - ✅ Pull Requests erstellen wenn `main` geschützt ist
 
@@ -73,9 +66,9 @@ gold-globe/                  ← Repo-Root (auch deployed via Vercel)
 - **Sprache**: Deutsch oder Englisch (konsistent pro Commit)
 - **Länge**: 1. Zeile max 72 Zeichen, danach Leerzeile + Details
 - **Beispiele**:
-  - `cloud: add neue Notiz zu Trading-Setup`
   - `server: fix CORS bug für Mobile`
   - `ui: redesign Sidebar mit Drag-Handle`
+  - `feat: add neue Trading-Strategie`
 
 ## Kontakt-Konvention
 
